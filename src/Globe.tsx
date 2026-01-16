@@ -11,44 +11,33 @@ import {
 } from "@/components/map";
 
 type GlobeProps = {
-  activeId: string|null;
+  activeId: string | null;
   onMarkerClick?: (id: string) => void;
 };
-function computeBearing(fromLng: number, toLng: number) {
-  let delta = toLng - fromLng;
-  if (delta > 180) delta -= 360;
-  if (delta < -180) delta += 360;
-  return -delta;
-}
 
-export default function Globe({ activeId,onMarkerClick }: GlobeProps) {
+export default function Globe({ activeId, onMarkerClick }: GlobeProps) {
   const mapRef = useRef<MapRef | null>(null);
+
   useEffect(() => {
     if (!activeId || !mapRef.current) return;
 
     const company = companies.find((c) => c.id === activeId);
     if (!company) return;
 
-    const map = mapRef.current;
-    const currentCenter = map.getCenter();
-    const targetbearing = computeBearing(
-      currentCenter.lng,
-      company.lat
-    );
-    map.flyTo({
+    mapRef.current.flyTo({
       center: [company.lng, company.lat],
       zoom: 6,
-      bearing: targetbearing,
-      pitch:0,
-      duration: 1500,
-      easing: (t)=>t*(2-t),
+      pitch: 0,
+      bearing: 0, // ← explicitly lock rotation
+      duration: 1200,
+      easing: (t) => t * (2 - t),
       essential: true,
     });
   }, [activeId]);
 
   return (
     <Map
-      ref = {mapRef}
+      ref={mapRef}
       projection={{ type: "globe" }}
       center={[72.95, 21.69]}
       zoom={8}
@@ -57,7 +46,7 @@ export default function Globe({ activeId,onMarkerClick }: GlobeProps) {
       renderWorldCopies={false}
       attributionControl={{ compact: true }}
     >
-      <MapClusterLayer 
+      <MapClusterLayer
         data={companiesGeoJson}
         clusterMaxZoom={6}
         clusterRadius={50}
@@ -67,16 +56,16 @@ export default function Globe({ activeId,onMarkerClick }: GlobeProps) {
           onMarkerClick?.(id);
         }}
       />
+
       {companies.map((company) => {
         const isActive = company.id === activeId;
+
         return (
           <MapMarker
             key={company.id}
             longitude={company.lng}
             latitude={company.lat}
-            onClick={() => {
-              onMarkerClick?.(company.id)
-            }}
+            onClick={() => onMarkerClick?.(company.id)}
           >
             <MarkerContent>
               <div className="relative">
@@ -93,6 +82,7 @@ export default function Globe({ activeId,onMarkerClick }: GlobeProps) {
                 />
               </div>
             </MarkerContent>
+
             <MarkerTooltip>{company.name}</MarkerTooltip>
           </MapMarker>
         );
