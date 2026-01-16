@@ -18,13 +18,20 @@ function App() {
   return (
     <div className="relative w-screen h-screen">
       <Globe
+        activeId={selectedId}
         onMarkerClick={(id) => {
           setSelectedId(id);
           setOpen(true);
         }}
       />
 
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet 
+      open={open} 
+        onOpenChange={(v) =>{
+          setOpen(v);
+          if(!v)setSelectedId(null);
+        }}
+      >
         <SheetContent side="right">
           <SheetHeader>
             <SheetTitle>{selected?.name ?? "Company"}</SheetTitle>

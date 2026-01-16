@@ -1,108 +1,102 @@
 import { useEffect, useRef } from "react";
-import maplibregl, { Map } from "maplibre-gl";
 import { companies } from "./data/locations";
+import { companiesGeoJson } from "./data/companies-geojson";
+import type { MapRef } from "@/components/map";
+import {
+  Map,
+  MapClusterLayer,
+  MapMarker,
+  MarkerContent,
+  MarkerTooltip,
+} from "@/components/map";
 
 type GlobeProps = {
+  activeId: string|null;
   onMarkerClick?: (id: string) => void;
 };
+function computeBearing(fromLng: number, toLng: number) {
+  let delta = toLng - fromLng;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  return -delta;
+}
 
-export default function Globe({ onMarkerClick }: GlobeProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<Map | null>(null);
-  const markerClickRef = useRef<((id: string) => void) | undefined>(onMarkerClick);
-  markerClickRef.current = onMarkerClick;
-
-  const companyGeoJson = {
-    type: "FeatureCollection",
-    features: companies.map((c) => ({
-      type: "Feature",
-      properties: {
-        id: c.id,
-        name: c.name
-      },
-      geometry: {
-        type: "Point",
-        coordinates: [c.lng, c.lat]
-      }
-    }))
-  } as GeoJSON.FeatureCollection;
-
+export default function Globe({ activeId,onMarkerClick }: GlobeProps) {
+  const mapRef = useRef<MapRef | null>(null);
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!activeId || !mapRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-      center: [72.95, 21.69],
-      zoom: 4,
-      minZoom: 1.2,
-      maxZoom: 16,
-      pitch: 0,
-      bearing: 0
+    const company = companies.find((c) => c.id === activeId);
+    if (!company) return;
+
+    const map = mapRef.current;
+    const currentCenter = map.getCenter();
+    const targetbearing = computeBearing(
+      currentCenter.lng,
+      company.lat
+    );
+    map.flyTo({
+      center: [company.lng, company.lat],
+      zoom: 6,
+      bearing: targetbearing,
+      pitch:0,
+      duration: 1500,
+      easing: (t)=>t*(2-t),
+      essential: true,
     });
-
-    mapRef.current = map;
-    console.log("Companies loaded:", companies);
-
-    map.on("style.load", () => {
-      map.setProjection({ type: "globe" });
-    });
-
-    map.on("load", () => {
-      map.addSource("companies", {
-        type: "geojson",
-        data: companyGeoJson
-      });
-
-      map.addLayer({
-        id: "company-points",
-        type: "circle",
-        source: "companies",
-        paint: {
-          "circle-radius": 6,
-          "circle-color": "#0f172a",
-          "circle-stroke-width": 3,
-          "circle-stroke-color": "rgba(15,23,42,0.25)"
-        }
-      });
-
-      map.on("click", "company-points", (e) => {
-        const feature = e.features?.[0];
-        if (!feature) return;
-
-        const id = feature.properties?.id as string;
-        console.log("Clicked company:", feature.properties?.name);
-        onMarkerClick?.(id);
-      });
-
-      map.on("mouseenter", "company-points", () => {
-        map.getCanvas().style.cursor = "pointer";
-      });
-
-      map.on("mouseleave", "company-points", () => {
-        map.getCanvas().style.cursor = "";
-      });
-    });
-
-    map.on("click", "company-points", (e) => {
-      const feature = e.features?.[0];
-      if (!feature) return;
-
-      const id = feature.properties?.id as string;
-      markerClickRef.current?.(id);
-    });
-
-
-    return () => {
-      map.remove();
-      mapRef.current = null;
-    };
-  }, []);
+  }, [activeId]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: "100%", height: "100%", pointerEvents:"auto"}}
-    />
+    <Map
+      ref = {mapRef}
+      projection={{ type: "globe" }}
+      center={[72.95, 21.69]}
+      zoom={8}
+      minZoom={1.2}
+      maxZoom={16}
+      renderWorldCopies={false}
+      attributionControl={{ compact: true }}
+    >
+      <MapClusterLayer 
+        data={companiesGeoJson}
+        clusterMaxZoom={6}
+        clusterRadius={50}
+        pointColor="#10b981"
+        onPointClick={(feature) => {
+          const id = feature.properties?.id as string;
+          onMarkerClick?.(id);
+        }}
+      />
+      {companies.map((company) => {
+        const isActive = company.id === activeId;
+        return (
+          <MapMarker
+            key={company.id}
+            longitude={company.lng}
+            latitude={company.lat}
+            onClick={() => {
+              onMarkerClick?.(company.id)
+            }}
+          >
+            <MarkerContent>
+              <div className="relative">
+                {isActive && (
+                  <span className="absolute -inset-2 rounded-full bg-blue-500/30 animate-ping" />
+                )}
+                <div
+                  className={[
+                    "rounded-full transition-all duration-200",
+                    isActive
+                      ? "h-4 w-4 bg-green-600 ring-4 ring-green-600/40"
+                      : "h-3 w-3 bg-teal-700 ring-4 ring-slate-900/25",
+                  ].join(" ")}
+                />
+              </div>
+            </MarkerContent>
+            <MarkerTooltip>{company.name}</MarkerTooltip>
+          </MapMarker>
+        );
+      })}
+    </Map>
   );
 }
