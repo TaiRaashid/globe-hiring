@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import { companies } from "./data/locations";
-import { companiesGeoJson } from "./data/companies-geojson";
+import { startupsGeoJson } from "@/data/startups-geojson";
 import type { MapRef } from "@/components/map";
+import type { Startup } from "./types/startup";
 import {
   Map,
   MapClusterLayer,
@@ -11,26 +11,26 @@ import {
 } from "@/components/map";
 
 type GlobeProps = {
+  startups: Startup[];
   activeId: string | null;
   onMarkerClick?: (id: string) => void;
 };
 
-export default function Globe({ activeId, onMarkerClick }: GlobeProps) {
+export default function Globe({ activeId, onMarkerClick, startups }: GlobeProps) {
   const mapRef = useRef<MapRef | null>(null);
 
   useEffect(() => {
     if (!activeId || !mapRef.current) return;
 
-    const company = companies.find((c) => c.id === activeId);
+    const company = startups.find((s) => s.id === activeId);
     if (!company) return;
 
     mapRef.current.flyTo({
-      center: [company.lng, company.lat],
-      zoom: 6,
+      center: [company.location.lng, company.location.lat],
+      zoom: 20,
+      bearing: 0,
       pitch: 0,
-      bearing: 0, // ← explicitly lock rotation
       duration: 1200,
-      easing: (t) => t * (2 - t),
       essential: true,
     });
   }, [activeId]);
@@ -44,27 +44,31 @@ export default function Globe({ activeId, onMarkerClick }: GlobeProps) {
       minZoom={1.2}
       maxZoom={16}
       renderWorldCopies={false}
-      attributionControl={{ compact: true }}
     >
       <MapClusterLayer
-        data={companiesGeoJson}
-        clusterMaxZoom={6}
-        clusterRadius={50}
-        pointColor="#10b981"
+        data={startupsGeoJson}
+        clusterMaxZoom={7}
+        clusterRadius={10}
+        clusterColors={[
+          "#14b8a6",
+          "#2563eb",
+          "#7c3aed",
+        ]}
+        clusterThresholds={[20,100]}
         onPointClick={(feature) => {
           const id = feature.properties?.id as string;
           onMarkerClick?.(id);
         }}
       />
 
-      {companies.map((company) => {
+      {startups.map((company) => {
         const isActive = company.id === activeId;
 
         return (
           <MapMarker
             key={company.id}
-            longitude={company.lng}
-            latitude={company.lat}
+            longitude={company.location.lng}
+            latitude={company.location.lat}
             onClick={() => onMarkerClick?.(company.id)}
           >
             <MarkerContent>
@@ -82,8 +86,22 @@ export default function Globe({ activeId, onMarkerClick }: GlobeProps) {
                 />
               </div>
             </MarkerContent>
+            <MarkerTooltip>
+              <div className="min-w-45 space-y-1">
+                <p className="text-sm font-semibold">{company.name}</p>
 
-            <MarkerTooltip>{company.name}</MarkerTooltip>
+                <p className="text-xs text-muted-foreground">
+                  {company.industries.join(", ")}
+                </p>
+
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>{company.work_mode}</span>
+                  <span>
+                    {company.location.city}, {company.location.country}
+                  </span>
+                </div>
+              </div>
+            </MarkerTooltip>
           </MapMarker>
         );
       })}

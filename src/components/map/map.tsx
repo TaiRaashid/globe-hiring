@@ -1115,7 +1115,7 @@ function MapClusterLayer<
       clusterRadius,
     });
 
-    // Add cluster circles layer
+    // Cluster circles
     map.addLayer({
       id: clusterLayerId,
       type: "circle",
@@ -1134,16 +1134,15 @@ function MapClusterLayer<
         "circle-radius": [
           "step",
           ["get", "point_count"],
-          20,
+          18,
           clusterThresholds[0],
-          30,
+          26,
           clusterThresholds[1],
-          40,
+          34,
         ],
       },
     });
 
-    // Add cluster count text layer
     map.addLayer({
       id: clusterCountLayerId,
       type: "symbol",
@@ -1151,15 +1150,21 @@ function MapClusterLayer<
       filter: ["has", "point_count"],
       layout: {
         "text-field": "{point_count_abbreviated}",
-        "text-size": 12,
+        "text-size": 14,
+        "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"], 
+        "text-anchor": "center",
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
       },
       paint: {
-        "text-color": "#fff",
+        "text-color": "#ffffff",
+        "text-halo-color": "rgba(0,0,0,0.5)", 
+        "text-halo-width": 1.5,
       },
     });
 
     // Add unclustered point layer
-    map.addLayer({
+    /*map.addLayer({
       id: unclusteredLayerId,
       type: "circle",
       source: sourceId,
@@ -1168,14 +1173,16 @@ function MapClusterLayer<
         "circle-color": pointColor,
         "circle-radius": 6,
       },
-    });
-
+    });*/
+    if (map.getLayer(clusterCountLayerId)) {
+      map.moveLayer(clusterCountLayerId);
+    }
     return () => {
       try {
         if (map.getLayer(clusterCountLayerId))
           map.removeLayer(clusterCountLayerId);
-        if (map.getLayer(unclusteredLayerId))
-          map.removeLayer(unclusteredLayerId);
+        //if (map.getLayer(unclusteredLayerId))
+          //map.removeLayer(unclusteredLayerId);
         if (map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
         if (map.getSource(sourceId)) map.removeSource(sourceId);
       } catch {
