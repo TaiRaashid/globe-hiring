@@ -1,13 +1,15 @@
-import { useEffect, useRef } from "react";
-import { startupsGeoJson } from "@/data/startups-geojson";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "@/components/map";
 import type { Startup } from "./types/startup";
+import { startupsGeoJson } from "@/data/startups-geojson";
+
 import {
   Map,
   MapClusterLayer,
-  MapMarker,
-  MarkerContent,
-  MarkerTooltip,
+  MapPopup,
+  MapControls,
 } from "@/components/map";
 
 type GlobeProps = {
@@ -16,9 +18,19 @@ type GlobeProps = {
   onMarkerClick?: (id: string) => void;
 };
 
-export default function Globe({ activeId, onMarkerClick, startups }: GlobeProps) {
+export default function Globe({
+  startups,
+  activeId,
+  onMarkerClick,
+}: GlobeProps) {
   const mapRef = useRef<MapRef | null>(null);
 
+  const [hoveredStartup, setHoveredStartup] = useState<{
+    coordinates: [number, number];
+    startup: Startup;
+  } | null>(null);
+
+  // Fly to active startup
   useEffect(() => {
     if (!activeId || !mapRef.current) return;
 
@@ -28,12 +40,10 @@ export default function Globe({ activeId, onMarkerClick, startups }: GlobeProps)
     mapRef.current.flyTo({
       center: [company.location.lng, company.location.lat],
       zoom: 20,
-      bearing: 0,
-      pitch: 0,
       duration: 1200,
       essential: true,
     });
-  }, [activeId]);
+  }, [activeId, startups]);
 
   return (
     <Map
@@ -44,67 +54,80 @@ export default function Globe({ activeId, onMarkerClick, startups }: GlobeProps)
       minZoom={1.2}
       maxZoom={16}
       renderWorldCopies={false}
+      fadeDuration={0}
     >
-      <MapClusterLayer
+      {/* Cluster layer */}
+      <MapClusterLayer<{ id: string }>
         data={startupsGeoJson}
         clusterMaxZoom={7}
         clusterRadius={10}
-        clusterColors={[
-          "#14b8a6",
-          "#2563eb",
-          "#7c3aed",
-        ]}
-        clusterThresholds={[20,100]}
+        clusterColors={["#14b8a6", "#2563eb", "#7c3aed"]}
+        clusterThresholds={[10, 100]}
+        pointColor="#094944"
+
         onPointClick={(feature) => {
-          const id = feature.properties?.id as string;
-          onMarkerClick?.(id);
+          const id = feature.properties?.id;
+          if (!id) return;
+          onMarkerClick?.(id); // click still opens Sheet
+        }}
+
+        onPointHover={(
+          feature: GeoJSON.Feature<GeoJSON.Point, { id: string }>,
+          coordinates: [number, number]
+        ) => {
+          const id = feature.properties?.id;
+          if (!id) return;
+
+          const startup = startups.find((s) => s.id === id);
+          if (!startup) return;
+
+          setHoveredStartup({ coordinates, startup });
+        }}
+
+        onPointLeave={() => {
+          setHoveredStartup(null);
         }}
       />
 
-      {startups.map((company) => {
-        const isActive = company.id === activeId;
+      {/* Hover tooltip */}
+      {hoveredStartup && (
+        <MapPopup
+          longitude={hoveredStartup.coordinates[0]}
+          latitude={hoveredStartup.coordinates[1]}
+          closeOnClick={false}
+          closeButton={false}
+          focusAfterOpen={false}
+          className="
+            pointer-events-none
+            rounded-lg
+            border
+            shadow-lg
+            transition-colors
+            bg-slate-800 text-white border-slate-200
+            dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700
+          "
+        >
+          <div className="min-w-48 space-y-1">
+            <p className="text-sm font-semibold">
+              {hoveredStartup.startup.name}
+            </p>
 
-        return (
-          <MapMarker
-            key={company.id}
-            longitude={company.location.lng}
-            latitude={company.location.lat}
-            onClick={() => onMarkerClick?.(company.id)}
-          >
-            <MarkerContent>
-              <div className="relative">
-                {isActive && (
-                  <span className="absolute -inset-2 rounded-full bg-blue-500/30 animate-ping" />
-                )}
-                <div
-                  className={[
-                    "rounded-full transition-all duration-200",
-                    isActive
-                      ? "h-4 w-4 bg-green-600 ring-4 ring-green-600/40"
-                      : "h-3 w-3 bg-teal-700 ring-4 ring-slate-900/25",
-                  ].join(" ")}
-                />
-              </div>
-            </MarkerContent>
-            <MarkerTooltip>
-              <div className="min-w-45 space-y-1">
-                <p className="text-sm font-semibold">{company.name}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              {hoveredStartup.startup.industries.join(", ")}
+            </p>
 
-                <p className="text-xs text-muted-foreground">
-                  {company.industries.join(", ")}
-                </p>
+            <div className="flex justify-between text-[11px] text-slate-500 dark:text-slate-400">
+              <span>{hoveredStartup.startup.work_mode}</span>
+              <span>
+                {hoveredStartup.startup.location.city},{" "}
+                {hoveredStartup.startup.location.country}
+              </span>
+            </div>
+          </div>
+        </MapPopup>
+      )}
 
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{company.work_mode}</span>
-                  <span>
-                    {company.location.city}, {company.location.country}
-                  </span>
-                </div>
-              </div>
-            </MarkerTooltip>
-          </MapMarker>
-        );
-      })}
+      <MapControls />
     </Map>
   );
 }

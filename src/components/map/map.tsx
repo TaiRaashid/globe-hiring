@@ -887,7 +887,7 @@ function MapPopup({
   return createPortal(
     <div
       className={cn(
-        "relative rounded-md border bg-popover p-3 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95",
+        "relative rounded-lg border p-3 shadow-lg animate-in fade-in-0 zoom-in-95 transition-colors",
         className
       )}
     >
@@ -1069,7 +1069,15 @@ type MapClusterLayerProps<
     feature: GeoJSON.Feature<GeoJSON.Point, P>,
     coordinates: [number, number]
   ) => void;
+  
+  onPointHover?: (
+    feature: GeoJSON.Feature<GeoJSON.Point, P>,
+    coordinates: [number, number]
+  ) => void;
   /** Callback when a cluster is clicked. If not provided, zooms into the cluster */
+  
+  onPointLeave?: () => void;
+
   onClusterClick?: (
     clusterId: number,
     coordinates: [number, number],
@@ -1087,6 +1095,8 @@ function MapClusterLayer<
   clusterThresholds = [100, 750],
   pointColor = "#3b82f6",
   onPointClick,
+  onPointHover,
+  onPointLeave,
   onClusterClick,
 }: MapClusterLayerProps<P>) {
   const { map, isLoaded } = useMap();
@@ -1095,12 +1105,14 @@ function MapClusterLayer<
   const clusterLayerId = `clusters-${id}`;
   const clusterCountLayerId = `cluster-count-${id}`;
   const unclusteredLayerId = `unclustered-point-${id}`;
-
+  const hoverGlowLayerId = `${unclusteredLayerId}-hover`;
   const stylePropsRef = useRef({
     clusterColors,
     clusterThresholds,
     pointColor,
   });
+
+  const hoveredIdRef = useRef<string | null>(null);
 
   // Add source and layers on mount
   useEffect(() => {
@@ -1115,7 +1127,7 @@ function MapClusterLayer<
       clusterRadius,
     });
 
-    // Cluster circles
+    // Add cluster circles layer
     map.addLayer({
       id: clusterLayerId,
       type: "circle",
@@ -1134,15 +1146,16 @@ function MapClusterLayer<
         "circle-radius": [
           "step",
           ["get", "point_count"],
-          18,
+          20,
           clusterThresholds[0],
-          26,
+          30,
           clusterThresholds[1],
-          34,
+          40,
         ],
       },
     });
 
+    // Add cluster count text layer
     map.addLayer({
       id: clusterCountLayerId,
       type: "symbol",
@@ -1150,44 +1163,83 @@ function MapClusterLayer<
       filter: ["has", "point_count"],
       layout: {
         "text-field": "{point_count_abbreviated}",
-        "text-size": 14,
-        "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"], 
-        "text-anchor": "center",
-        "text-allow-overlap": true,
-        "text-ignore-placement": true,
+        "text-size": 12,
       },
       paint: {
-        "text-color": "#ffffff",
-        "text-halo-color": "rgba(0,0,0,0.5)", 
-        "text-halo-width": 1.5,
+        "text-color": "#fff",
       },
     });
 
-    // Add unclustered point layer
-    /*map.addLayer({
+    
+    const glowLayerId = `${unclusteredLayerId}-glow`;
+
+    map.addLayer({
+      id: glowLayerId,
+      type: "circle",
+      source: sourceId,
+      filter: ["!", ["has", "point_count"]],
+      paint: {
+        "circle-color": pointColor,
+        "circle-radius": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          5, 10,
+          12, 18
+        ],
+        "circle-opacity": 0.25,
+        "circle-blur": 0.8,
+      },
+    });
+    const hoverGlowLayerId = `${unclusteredLayerId}-hover`;
+
+    map.addLayer({
+      id: hoverGlowLayerId,
+      type: "circle",
+      source: sourceId,
+      filter: ["==", ["get", "id"], ""], // initially match nothing
+      paint: {
+        "circle-color": pointColor,
+        "circle-radius": 20,
+        "circle-opacity": 0.6,
+        "circle-blur": 1.2,
+      },
+    });
+
+    const ringLayerId = `${unclusteredLayerId}-ring`;
+
+    map.addLayer({
+      id: ringLayerId,
+      type: "circle",
+      source: sourceId,
+      filter: ["!", ["has", "point_count"]],
+      paint: {
+        "circle-color": "#094944",
+        "circle-radius": 7,
+        "circle-opacity": 0.9,
+      },
+    });
+
+    map.addLayer({
       id: unclusteredLayerId,
       type: "circle",
       source: sourceId,
       filter: ["!", ["has", "point_count"]],
       paint: {
         "circle-color": pointColor,
-        "circle-radius": 6,
+        "circle-radius": 5,
       },
-    });*/
-    if (map.getLayer(clusterCountLayerId)) {
-      map.moveLayer(clusterCountLayerId);
-    }
+    });
+
     return () => {
       try {
-        if (map.getLayer(clusterCountLayerId))
-          map.removeLayer(clusterCountLayerId);
-        //if (map.getLayer(unclusteredLayerId))
-          //map.removeLayer(unclusteredLayerId);
+        if (map.getLayer(glowLayerId)) map.removeLayer(glowLayerId);
+        if (map.getLayer(ringLayerId)) map.removeLayer(ringLayerId);
+        if (map.getLayer(unclusteredLayerId)) map.removeLayer(unclusteredLayerId);
         if (map.getLayer(clusterLayerId)) map.removeLayer(clusterLayerId);
+        if (map.getLayer(clusterCountLayerId)) map.removeLayer(clusterCountLayerId);
         if (map.getSource(sourceId)) map.removeSource(sourceId);
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded, map, sourceId]);
@@ -1349,6 +1401,87 @@ function MapClusterLayer<
     onClusterClick,
     onPointClick,
   ]);
+
+  // Handle hover events for unclustered points
+  useEffect(() => {
+  if (!isLoaded || !map) return;
+  if (!map.getLayer(unclusteredLayerId)) return;
+
+  const handleMouseMove = (
+    e: MapLibreGL.MapMouseEvent & {
+      features?: MapLibreGL.MapGeoJSONFeature[];
+    }
+  ) => {
+    const features = map.queryRenderedFeatures(e.point, {
+      layers: [unclusteredLayerId],
+    });
+
+    if (!features.length) {
+      if (hoveredIdRef.current !== null) {
+        hoveredIdRef.current = null;
+
+        map.setFilter(hoverGlowLayerId, [
+          "==",
+          ["get", "id"],
+          "",
+        ]);
+
+        onPointLeave?.();
+      }
+
+      map.getCanvas().style.cursor = "";
+      return;
+    }
+
+    const feature = features[0] as unknown as GeoJSON.Feature<
+      GeoJSON.Point,
+      P
+    >;
+
+    const id = feature.properties?.id as string | undefined;
+    if (!id) return;
+
+    if (hoveredIdRef.current !== id) {
+      hoveredIdRef.current = id;
+
+      map.setFilter(hoverGlowLayerId, [
+        "==",
+        ["get", "id"],
+        id,
+      ]);
+
+      const coordinates = feature.geometry.coordinates.slice() as [
+        number,
+        number
+      ];
+
+      onPointHover?.(feature, coordinates);
+    }
+
+    map.getCanvas().style.cursor = "pointer";
+  };
+
+  const handleMouseLeave = () => {
+    hoveredIdRef.current = null;
+
+    map.setFilter(hoverGlowLayerId, [
+      "==",
+      ["get", "id"],
+      "",
+    ]);
+
+    map.getCanvas().style.cursor = "";
+    onPointLeave?.();
+  };
+
+  map.on("mousemove", handleMouseMove);
+  map.on("mouseleave", unclusteredLayerId, handleMouseLeave);
+
+  return () => {
+    map.off("mousemove", handleMouseMove);
+    map.off("mouseleave", unclusteredLayerId, handleMouseLeave);
+  };
+}, [isLoaded, map, unclusteredLayerId, onPointHover, onPointLeave]);
 
   return null;
 }
