@@ -62,70 +62,90 @@ function App() {
           if (!v) setSelectedId(null);
         }}
       >
-        <SheetContent side="right" className="w-105 sm:w-120 overflow-y-auto">
-  {selected && (
-    <>
-      {/* Header */}
-                <SheetHeader>
-                  <SheetTitle className="text-xl">{selected.name}</SheetTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {selected.industries.join(" • ")}
-                  </p>
+        <SheetContent side="right" className="w-105 sm:w-120 overflow-y-auto bg-background/95 backdrop-blur-xl border-l shadow-2xl px-6 py-6">
+          {selected && (
+              <>
+              {/* Header */}
+                <SheetHeader className="pb-6 border-b">
+                  <SheetTitle className="text-2xl tracking-tight">
+                    {selected.name}
+                  </SheetTitle>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {selected.industries.map((i) => (
+                      <span
+                        key={i}
+                        className="
+                          rounded-full
+                          bg-primary/10
+                          px-3 py-1
+                          text-xs font-medium
+                          text-primary
+                        "
+                      >
+                        {i}
+                      </span>
+                    ))}
+                  </div>
                 </SheetHeader>
 
-                <div className="mt-6 space-y-6 text-sm">
+                <Separator />
+
+                <div className="mt-8 space-y-10 text-sm">
 
                   {/* Meta */}
                   <div className="grid grid-cols-2 gap-4">
-                    <Info label="Founded" value={selected.founded} />
-                    <Info label="Work mode" value={selected.work_mode} />
-                    <Info label="Team size" value={selected.team_size} />
-                    <Info
+                    <MetaCard label="Founded" value={selected.founded} />
+                    <MetaCard label="Work mode" value={selected.work_mode} />
+                    <MetaCard label="Team size" value={selected.team_size} />
+                    <MetaCard
                       label="Location"
                       value={`${selected.location.city}, ${selected.location.country}`}
                     />
                   </div>
+                  <div className="space-y-2">
+                    {/* About */}
+                    <Section title="About">
+                      <p className="leading-relaxed text-muted-foreground">
+                        {selected.about}
+                      </p>
+                    </Section>
 
-                  {/* About */}
-                  <Section title="About">
-                    <p className="leading-relaxed text-muted-foreground">
-                      {selected.about}
-                    </p>
-                  </Section>
+                    <Separator />
 
-                  {/* Hiring */}
-                  <Section title="Hiring">
-                    <p className="mb-2 font-medium">
-                      {selected.jobs.total} open positions
-                    </p>
+                    {/* Hiring */}
+                    <Section title="Hiring">
+                      <p className="mb-2 font-medium">
+                        {selected.jobs.total} open positions
+                      </p>
 
-                    <ul className="space-y-2">
-                      {selected.jobs.positions.slice(0, 5).map((job) => (
-                        <li
-                          key={job.id}
-                          className="rounded-md border p-2 hover:bg-muted transition"
-                        >
-                          <p className="font-medium">{job.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {job.department} • {job.work_type}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
-                  </Section>
+                      <ul className="space-y-2">
+                        {selected.jobs.positions.slice(0, 5).map((job) => (
+                          <li
+                            key={job.id}
+                            className="rounded-lg border p-3 transition hover:border-primary/40 hover:bg-primary/5"                        >
+                            <p className="font-medium">{job.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {job.department} • {job.work_type}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </Section>
 
-                  {/* Founders */}
-                  <Section title="Founders">
-                    <ul className="space-y-2">
-                      {selected.founders.map((f) => (
-                        <li key={f.name}>
-                          <p className="font-medium">{f.name}</p>
-                          <p className="text-xs text-muted-foreground">{f.title}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </Section>
+                    <Separator />
 
+                    {/* Founders */}
+                    <Section title="Founders">
+                      <ul className="space-y-3">
+                        {selected.founders.map((f) => (
+                          <li key={f.name}>
+                            <p className="font-medium">{f.name}</p>
+                            <p className="text-xs text-muted-foreground">{f.title}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    </Section>
+                  </div>
                   {/* Funding */}
                   <Section title="Funding">
                     <Info label="Stage" value={selected.funding.stage} />
@@ -150,7 +170,7 @@ function App() {
                         {selected.investors.map((inv) => (
                           <span
                             key={inv}
-                            className="rounded-full bg-muted px-2 py-1 text-xs"
+                            className="rounded-full border px-3 py-1 text-xs bg-background text-muted-foreground"
                           >
                             {inv}
                           </span>
@@ -167,6 +187,7 @@ function App() {
     </div>
   );
 }
+
 function Section({
   title,
   children,
@@ -175,9 +196,37 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div>
-      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
+    <section className="space-y-4">
+      <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+        {title}
+      </h3>
       {children}
+    </section>
+  );
+}
+
+function Separator() {
+  return (
+    <div className="relative h-px w-full">
+      <div className="absolute inset-0 bg-linear-to-r from-transparent via-border/60 to-transparent" />
+    </div>
+  );
+}
+
+
+function MetaCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="rounded-lg border bg-muted/40 p-4">
+      <div className="grid grid-cols-2 gap-4">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="mt-1 font-medium">{value}</p>
+      </div>
     </div>
   );
 }

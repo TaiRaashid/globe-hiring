@@ -101,23 +101,31 @@ export default function Globe({
             pointer-events-none
             rounded-lg
             border
-            shadow-lg
-            transition-colors
-            bg-slate-800 text-white border-slate-200
-            dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700
+            backdrop-blur-xl
+            shadow-[0_12px_30px_rgba(0,0,0,0.35)]
+            transition-all duration-200
+            bg-slate-900/90 text-slate-100 border-white/10
+            dark:bg-white/95 dark:text-slate-900 dark:border-black/10
           "
         >
-          <div className="min-w-48 space-y-1">
-            <p className="text-sm font-semibold">
-              {hoveredStartup.startup.name}
-            </p>
-
-            <p className="text-xs text-slate-600 dark:text-slate-400">
+          <div className="min-w-56 space-y-2">
+            {/*Title*/}
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm font-semibold leading-tight tracking-tight">
+                {hoveredStartup.startup.name}
+              </p>
+            </div>
+            {/*Industries*/}
+            <p className="text-xs text-slate-400 dark:text-slate-500 line-clamp-2">
               {hoveredStartup.startup.industries.join(", ")}
             </p>
+            {/*Divider*/}
+            <div className="h-px w-full bg-white/10 dark:bg-black/10"/>
 
-            <div className="flex justify-between text-[11px] text-slate-500 dark:text-slate-400">
-              <span>{hoveredStartup.startup.work_mode}</span>
+            <div className="flex justify-between text-[11px] font-medium text-slate-400 dark:text-slate-500">
+              <span className="uppercase tracking-wide">
+                {hoveredStartup.startup.work_mode}
+              </span>
               <span>
                 {hoveredStartup.startup.location.city},{" "}
                 {hoveredStartup.startup.location.country}
