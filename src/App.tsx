@@ -1,7 +1,9 @@
 import Globe from "./Globe";
 import { startups } from "@/data/startups";
-import { useMemo, useState } from "react";
-
+import { useEffect, useRef, useState } from "react";
+import type { MapRef } from "@/components/map";
+import { geocodeSuggestions, type GeocodeSuggestion } from "@/utils/geocode";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   Sheet,
   SheetContent,
@@ -10,49 +12,187 @@ import {
 } from "@/components/ui/sheet";
 
 function App() {
+  console.log("App rendered");
+
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selected = startups.find((s) => s.id === selectedId);
+  const globeRef = useRef<MapRef | null>(null);
   const [query, setQuery] = useState("");
-  const [industry, setIndustry] = useState<string | null>(null);
-  const [workMode, setWorkMode] = useState<string | null>(null);
-  const [country, setCountry] = useState<string | null>(null);
-  const filteredStartups = useMemo(() => {
-    return startups.filter((s) => {
-      if (
-        query &&
-        !s.name.toLowerCase().includes(query.toLowerCase())
-      ) {
-        return false;
-      }
+  const debouncedQuery = useDebounce(query,500);
+  const [isSearching, setIsSearching] = useState(false);
+  const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
 
-      if (industry && !s.industries.includes(industry)) {
-        return false;
-      }
+  useEffect(() => {
+    if (!debouncedQuery) {
+      setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
 
-      if (workMode && s.work_mode !== workMode) {
-        return false;
-      }
+    let cancelled = false;
 
-      if (country && s.location.country !== country) {
-        return false;
-      }
+    async function run() {
+      setIsSearching(true);
 
-      return true;
-    });
-  }, [query, industry, workMode, country]);
+      try {
+        const results = await geocodeSuggestions(debouncedQuery);
+        if (cancelled) return;
+
+        setSuggestions(results);
+        setIsOpen(true);
+      } finally {
+        if (!cancelled) setIsSearching(false);
+      }
+    }
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery]);
+
+
+  function handlePlaceSelect(place: GeocodeSuggestion) {
+    const map = globeRef.current;
+    if (!map) return;
+
+    setQuery(place.label);
+    setIsOpen(false);
+    setSuggestions([]);
+
+    if (place.boundingBox) {
+      map.fitBounds(
+        [
+          [place.boundingBox[2], place.boundingBox[0]],
+          [place.boundingBox[3], place.boundingBox[1]],
+        ],
+        { padding: 40, duration: 1200 }
+      );
+    } else {
+      map.flyTo({
+        center: [place.lon, place.lat],
+        zoom: 8,
+        duration: 1200,
+      });
+    }
+  }
+  useEffect(() => {
+  setHighlightedIndex(suggestions.length > 0 ? 0 : -1);
+}, [suggestions]);
 
   return (
     <div className="relative w-screen h-screen">
+      <div className="
+        absolute top-4 left-1/2 -translate-x-1/2 z-30
+        w-[90%] max-w-2xl
+      ">
+        <div className="
+          flex items-center gap-3
+          rounded-full
+          bg-background/90
+          backdrop-blur-xl
+          border
+          px-5 py-3
+          shadow-lg
+        ">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (!isOpen || suggestions.length === 0) return;
+
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setHighlightedIndex((prev) =>
+                  prev < suggestions.length - 1 ? prev + 1 : prev
+                );
+              }
+
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+              }
+
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const selected = suggestions[highlightedIndex];
+                if (selected) {
+                  handlePlaceSelect(selected);
+                }
+              }
+
+              if (e.key === "Escape") {
+                setIsOpen(false);
+              }
+            }}
+            placeholder="Search a place on the map…"
+            className="flex-1 bg-transparent outline-none text-sm"
+          />
+
+          {query && (
+            <button
+              onClick={() => {
+                setQuery("");
+                setSuggestions([]);
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+              }}
+              className="
+                text-muted-foreground
+                hover:text-foreground
+                transition
+                px-1
+              "
+              aria-label="Clear search"
+            >
+              ✕
+            </button>
+          )}
+          {isOpen && suggestions.length > 0 && (
+            <div className="
+              absolute top-full mt-2 w-full
+              rounded-xl border
+              bg-background/95 backdrop-blur-xl
+              shadow-xl z-50
+              overflow-hidden
+            ">
+              {suggestions.map((place,index) => (
+                <button
+                  key={place.id}
+                  onClick={() => handlePlaceSelect(place)}
+                  className={`
+                    w-full px-4 py-3 text-left
+                    ${index === highlightedIndex?"bg-mute":"hover:bg-muted"}
+                  `}
+                >
+                  <div className="text-sm font-medium line-clamp-1">
+                    {place.label}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          {isSearching && (
+            <div className="text-xs text-muted-foreground animate-pulse">
+              Searching…
+            </div>
+          )}
+        </div>
+      </div>
 
       <Globe
+        ref = {globeRef}
+        startups={startups}
         activeId={selectedId}
         onMarkerClick={(id) => {
           setSelectedId(id);
           setOpen(true);
         }}
-        startups = {filteredStartups}
       />
 
       <Sheet

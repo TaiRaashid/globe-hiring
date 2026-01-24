@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef,useEffect, useRef, useState } from "react";
 import type { MapRef } from "@/components/map";
 import type { Startup } from "./types/startup";
 import { startupsGeoJson } from "@/data/startups-geojson";
@@ -18,13 +18,20 @@ type GlobeProps = {
   onMarkerClick?: (id: string) => void;
 };
 
-export default function Globe({
-  startups,
-  activeId,
-  onMarkerClick,
-}: GlobeProps) {
+const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
+  { startups, activeId, onMarkerClick },
+  ref
+) {
   const mapRef = useRef<MapRef | null>(null);
-
+  useEffect(() => {
+    if (!ref) return;
+    if(!mapRef.current)return;
+    if (typeof ref === "function") {
+      ref(mapRef.current);
+    } else {
+      ref.current = mapRef.current;
+    }
+  }, [ref,mapRef.current]);
   const [hoveredStartup, setHoveredStartup] = useState<{
     coordinates: [number, number];
     startup: Startup;
@@ -39,7 +46,7 @@ export default function Globe({
 
     mapRef.current.flyTo({
       center: [company.location.lng, company.location.lat],
-      zoom: 20,
+      zoom: 25,
       duration: 1200,
       essential: true,
     });
@@ -52,7 +59,7 @@ export default function Globe({
       center={[72.95, 21.69]}
       zoom={8}
       minZoom={1.2}
-      maxZoom={16}
+      maxZoom={20}
       renderWorldCopies={false}
       fadeDuration={0}
     >
@@ -138,4 +145,6 @@ export default function Globe({
       <MapControls />
     </Map>
   );
-}
+});
+
+export default Globe;
