@@ -15,11 +15,12 @@ import {
 type GlobeProps = {
   startups: Startup[];
   activeId: string | null;
+  filteredIds?: string[];
   onMarkerClick?: (id: string) => void;
 };
 
 const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
-  { startups, activeId, onMarkerClick },
+  { startups, activeId, filteredIds, onMarkerClick },
   ref
 ) {
   const mapRef = useRef<MapRef | null>(null);
@@ -36,6 +37,15 @@ const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
     coordinates: [number, number];
     startup: Startup;
   } | null>(null);
+
+  const filteredGeoJson = {
+    ...startupsGeoJson,
+    features: filteredIds
+      ? startupsGeoJson.features.filter((f) =>
+          filteredIds.includes(f.properties?.id)
+        )
+      : startupsGeoJson.features,
+  };
 
   // Fly to active startup
   useEffect(() => {
@@ -65,7 +75,7 @@ const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
     >
       {/* Cluster layer */}
       <MapClusterLayer<{ id: string }>
-        data={startupsGeoJson}
+        data={filteredGeoJson}
         clusterMaxZoom={7}
         clusterRadius={10}
         clusterColors={["#14b8a6", "#2563eb", "#7c3aed"]}

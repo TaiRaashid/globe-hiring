@@ -4,16 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "@/components/map";
 import { geocodeSuggestions, type GeocodeSuggestion } from "@/utils/geocode";
 import { useDebounce } from "@/hooks/useDebounce";
+import { buildSearchIndex, searchIndex } from "@/utils/search";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Building2,
+  Briefcase,
+  Layers,
+  MapPin,
+} from "lucide-react";
 
 function App() {
-  console.log("App rendered");
-
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -25,6 +30,79 @@ function App() {
   const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const searchIndexRef = useRef(buildSearchIndex(startups));
+  const domainResults = searchIndex(searchIndexRef.current, debouncedQuery);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
+  const [activeIndex, setActiveIndex] = useState<number>(-1);
+
+  type UIResult =
+    | {
+        key: string;
+        type: "startup";
+        title: string;
+        subtitle: string;
+        startupId: string;
+      }
+    | {
+        key: string;
+        type: "industry";
+        title: string;
+      }
+    | {
+        key: string;
+        type: "job";
+        title: string;
+        subtitle: string;
+        startupId: string;
+        isHiring: boolean;
+      }
+    | {
+        key: string;
+        type: "location";
+        title: string;
+        place: GeocodeSuggestion;
+      };
+
+  const uiResults: UIResult[] = [
+    ...domainResults
+      .filter(r => r.type === "startup")
+      .slice(0, 5)
+      .map(r => ({
+        key: `startup-${r.startup.id}`,
+        type: "startup" as const,
+        title: r.startup.name,
+        subtitle: "Startup",
+        startupId: r.startup.id,
+      })),
+
+    ...domainResults
+      .filter(r => r.type === "industry")
+      .slice(0, 3)
+      .map(r => ({
+        key: `industry-${r.industry}`,
+        type: "industry" as const,
+        title: r.industry,
+      })),
+
+    ...domainResults
+      .filter(r => r.type === "job")
+      .slice(0, 5)
+      .map(r => ({
+        key: `job-${r.jobTitle}-${r.startup.id}`,
+        type: "job" as const,
+        title: r.jobTitle,
+        subtitle: r.startup.name,
+        startupId: r.startup.id,
+        isHiring: true,
+      })),
+
+    ...suggestions.slice(0, 5).map(place => ({
+      key: `location-${place.id}`,
+      type: "location" as const,
+      title: place.label,
+      place,
+    })),
+  ];
 
   useEffect(() => {
     if (!debouncedQuery) {
@@ -56,6 +134,9 @@ function App() {
     };
   }, [debouncedQuery]);
 
+  useEffect(() => {
+    setActiveIndex(uiResults.length > 0 ? 0 : -1);
+  }, [debouncedQuery]);
 
   function handlePlaceSelect(place: GeocodeSuggestion) {
     const map = globeRef.current;
@@ -85,12 +166,34 @@ function App() {
   setHighlightedIndex(suggestions.length > 0 ? 0 : -1);
 }, [suggestions]);
 
+  const matchedIds = Array.from(
+         new Set(domainResults.map((r) => r.startup.id))
+  );
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (!searchContainerRef.current) return;
+
+      if (!searchContainerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   return (
     <div className="relative w-screen h-screen">
-      <div className="
-        absolute top-4 left-1/2 -translate-x-1/2 z-30
-        w-[90%] max-w-2xl
-      ">
+      <div
+        ref={searchContainerRef}
+        className="
+          absolute top-4 left-1/2 -translate-x-1/2 z-30
+          w-[90%] max-w-2xl
+        "
+      >
         <div className="
           flex items-center gap-3
           rounded-full
@@ -104,26 +207,35 @@ function App() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (!isOpen || suggestions.length === 0) return;
+              if (!isOpen || uiResults.length === 0) return;
 
               if (e.key === "ArrowDown") {
                 e.preventDefault();
-                setHighlightedIndex((prev) =>
-                  prev < suggestions.length - 1 ? prev + 1 : prev
-                );
+                setActiveIndex(i => (i + 1) % uiResults.length);
               }
 
               if (e.key === "ArrowUp") {
                 e.preventDefault();
-                setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : 0));
+                setActiveIndex(i =>
+                  i <= 0 ? uiResults.length - 1 : i - 1
+                );
               }
 
               if (e.key === "Enter") {
                 e.preventDefault();
-                const selected = suggestions[highlightedIndex];
-                if (selected) {
-                  handlePlaceSelect(selected);
+                const item = uiResults[activeIndex];
+                if (!item) return;
+
+                if (item.type === "location") {
+                  handlePlaceSelect(item.place);
                 }
+
+                if (item.type === "startup" || item.type === "job") {
+                  setSelectedId(item.startupId);
+                  setOpen(true);
+                }
+
+                setIsOpen(false);
               }
 
               if (e.key === "Escape") {
@@ -153,42 +265,142 @@ function App() {
               ✕
             </button>
           )}
-          {isOpen && suggestions.length > 0 && (
-            <div className="
-              absolute top-full mt-2 w-full
-              rounded-xl border
-              bg-background/95 backdrop-blur-xl
-              shadow-xl z-50
-              overflow-hidden
-            ">
-              {suggestions.map((place,index) => (
-                <button
-                  key={place.id}
-                  onClick={() => handlePlaceSelect(place)}
-                  className={`
-                    w-full px-4 py-3 text-left
-                    ${index === highlightedIndex?"bg-mute":"hover:bg-muted"}
-                  `}
-                >
-                  <div className="text-sm font-medium line-clamp-1">
-                    {place.label}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+
           {isSearching && (
             <div className="text-xs text-muted-foreground animate-pulse">
               Searching…
             </div>
           )}
         </div>
+        {isOpen && uiResults.length > 0 && (
+          <div
+            className="
+              absolute top-full mt-2 w-full
+              rounded-2xl border
+              bg-background/95 backdrop-blur-xl
+              shadow-xl z-50
+              overflow-hidden
+            "
+          >
+            {/* ================= STARTUPS ================= */}
+            {domainResults.some(r => r.type === "startup") && (
+              <SectionBlock title="Startups">
+                {domainResults
+                  .filter(r => r.type === "startup")
+                  .slice(0, 5)
+                  .map((r) => {
+                    const index = uiResults.findIndex(
+                      u => u.key === `startup-${r.startup.id}`
+                    );
+
+                    return (
+                      <ResultItem
+                        key={r.startup.id}
+                        title={r.startup.name}
+                        subtitle="Startup"
+                        icon={<ResultIcon type="startup" />}
+                        badge={r.startup.jobs.total > 0 ? "Hiring" : undefined}
+                        active={index === activeIndex}
+                        onClick={() => {
+                          setSelectedId(r.startup.id);
+                          setOpen(true);
+                          setIsOpen(false);
+                        }}
+                      />
+                    );
+                  })}
+              </SectionBlock>
+            )}
+
+            {/* ================= INDUSTRIES ================= */}
+            {domainResults.some(r => r.type === "industry") && (
+              <SectionBlock title="Industries">
+                {domainResults
+                  .filter(r => r.type === "industry")
+                  .slice(0, 3)
+                  .map((r) => {
+                    const index = uiResults.findIndex(
+                      u => u.key === `industry-${r.industry}`
+                    );
+
+                    return (
+                      <ResultItem
+                        key={r.industry}
+                        title={r.industry}
+                        subtitle="Industry"
+                        icon={<ResultIcon type="industry" />}
+                        active={index === activeIndex}
+                        onClick={() => {
+                          setIsOpen(false);
+                        }}
+                      />
+                    );
+                  })}
+              </SectionBlock>
+            )}
+
+            {/* ================= JOBS ================= */}
+            {domainResults.some(r => r.type === "job") && (
+              <SectionBlock title="Jobs">
+                {domainResults
+                  .filter(r => r.type === "job")
+                  .slice(0, 5)
+                  .map((r) => {
+                    const index = uiResults.findIndex(
+                      u => u.key === `job-${r.jobTitle}-${r.startup.id}`
+                    );
+
+                    return (
+                      <ResultItem
+                        key={`${r.jobTitle}-${r.startup.id}`}
+                        title={r.jobTitle}
+                        subtitle={r.startup.name}
+                        icon={<ResultIcon type="job" />}
+                        badge="Hiring"
+                        active={index === activeIndex}
+                        onClick={() => {
+                          setSelectedId(r.startup.id);
+                          setOpen(true);
+                          setIsOpen(false);
+                        }}
+                      />
+                    );
+                  })}
+              </SectionBlock>
+            )}
+
+            {/* ================= LOCATIONS ================= */}
+            {suggestions.length > 0 && (
+              <SectionBlock title="Locations">
+                {suggestions.slice(0, 5).map((place) => {
+                  const index = uiResults.findIndex(
+                    u => u.key === `location-${place.id}`
+                  );
+
+                  return (
+                    <ResultItem
+                      key={place.id}
+                      title={place.label}
+                      icon={<ResultIcon type="location" />}
+                      active={index === activeIndex}
+                      onClick={() => {
+                        handlePlaceSelect(place);
+                        setIsOpen(false);
+                      }}
+                    />
+                  );
+                })}
+              </SectionBlock>
+            )}
+          </div>
+        )}
       </div>
 
       <Globe
         ref = {globeRef}
         startups={startups}
         activeId={selectedId}
+        filteredIds={matchedIds.length > 0 ? matchedIds : undefined}
         onMarkerClick={(id) => {
           setSelectedId(id);
           setOpen(true);
@@ -199,6 +411,7 @@ function App() {
         open={open}
         onOpenChange={(v) => {
           setOpen(v);
+          setIsOpen(false);
           if (!v) setSelectedId(null);
         }}
       >
@@ -384,6 +597,89 @@ function Info({
       <p className="font-medium">{value}</p>
     </div>
   );
+}
+
+function SectionBlock({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-b last:border-b-0">
+      <p className="px-4 pt-3 pb-1 text-xs font-semibold text-muted-foreground uppercase">
+        {title}
+      </p>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function ResultItem({
+  title,
+  subtitle,
+  icon,
+  badge,
+  active,
+  onClick,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: React.ReactNode;
+  badge?: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        w-full px-4 py-3 flex items-center gap-3 text-left
+        ${active ? "bg-muted" : "hover:bg-muted"}
+      `}
+    >
+      {icon}
+
+      <div className="flex-1">
+        <div className="text-sm font-medium">{title}</div>
+        {subtitle && (
+          <div className="text-xs text-muted-foreground">
+            {subtitle}
+          </div>
+        )}
+      </div>
+
+      {badge && (
+        <span className="
+          rounded-full bg-emerald-500/10
+          px-2 py-0.5 text-xs font-medium
+          text-emerald-600
+        ">
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function ResultIcon({
+  type,
+}: {
+  type: "startup" | "job" | "industry" | "location";
+}) {
+  const className = "h-4 w-4 text-muted-foreground shrink-0";
+
+  switch (type) {
+    case "startup":
+      return <Building2 className={className} />;
+    case "job":
+      return <Briefcase className={className} />;
+    case "industry":
+      return <Layers className={className} />;
+    case "location":
+      return <MapPin className={className} />;
+  }
 }
 
 export default App;
