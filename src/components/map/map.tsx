@@ -1143,15 +1143,37 @@ function MapClusterLayer<
           clusterThresholds[1],
           clusterColors[2],
         ],
+
+        // 🔑 THIS is where animation belongs
         "circle-radius": [
-          "step",
-          ["get", "point_count"],
-          20,
-          clusterThresholds[0],
-          30,
-          clusterThresholds[1],
-          40,
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          2, 14,
+          6, 20,
+          10, 30,
+          14, 40,
         ],
+
+        "circle-opacity": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          2, 0.6,
+          8, 0.85,
+          14, 1,
+        ],
+    
+        // 🎬 Transitions
+        "circle-radius-transition": {
+          duration: 300,
+        },
+        "circle-color-transition": {
+          duration: 300,
+        },
+        "circle-opacity-transition": {
+          duration: 200,
+        },
       },
     });
 
@@ -1167,6 +1189,10 @@ function MapClusterLayer<
       },
       paint: {
         "text-color": "#fff",
+        "text-opacity": 0.9,
+        "text-opacity-transition": {
+          duration: 200,
+        },
       },
     });
 
@@ -1249,9 +1275,11 @@ function MapClusterLayer<
     if (!isLoaded || !map || typeof data === "string") return;
 
     const source = map.getSource(sourceId) as MapLibreGL.GeoJSONSource;
-    if (source) {
+    if (!source) return;
+
+    requestAnimationFrame(() => {
       source.setData(data);
-    }
+    });
   }, [isLoaded, map, data, sourceId]);
 
   // Update layer styles when props change
@@ -1333,6 +1361,8 @@ function MapClusterLayer<
         map.easeTo({
           center: coordinates,
           zoom,
+          duration: 600,
+          easing: (t) => t * (2 - t),
         });
       }
     };

@@ -1,6 +1,6 @@
 import Globe from "./Globe";
 import { startups } from "@/data/startups";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, forwardRef} from "react";
 import type { MapRef } from "@/components/map";
 import { geocodeSuggestions, type GeocodeSuggestion } from "@/utils/geocode";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -34,6 +34,8 @@ function App() {
   const domainResults = searchIndex(searchIndexRef.current, debouncedQuery);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState<number>(-1);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [appliedFilterIds, setAppliedFilterIds] = useState<string[] | null>(null);
 
   type UIResult =
     | {
@@ -104,6 +106,14 @@ function App() {
     })),
   ];
 
+  const uniqueIndustries = Array.from(
+    new Map(
+      domainResults
+        .filter(r => r.type === "industry")
+        .map(r => [r.industry.toLowerCase(), r])
+    ).values()
+  );
+
   useEffect(() => {
     if (!debouncedQuery) {
       setSuggestions([]);
@@ -163,12 +173,8 @@ function App() {
     }
   }
   useEffect(() => {
-  setHighlightedIndex(suggestions.length > 0 ? 0 : -1);
-}, [suggestions]);
-
-  const matchedIds = Array.from(
-         new Set(domainResults.map((r) => r.startup.id))
-  );
+    setHighlightedIndex(suggestions.length > 0 ? 0 : -1);
+  }, [suggestions]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -184,6 +190,19 @@ function App() {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  useEffect(() => {
+    if (activeIndex < 0) return;
+
+    const el = itemRefs.current[activeIndex];
+    if (!el) return;
+
+    el.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+      behavior: "smooth",
+    });
+  }, [activeIndex]);
 
   return (
     <div className="relative w-screen h-screen">
@@ -234,7 +253,20 @@ function App() {
                   setSelectedId(item.startupId);
                   setOpen(true);
                 }
+                
+                if (item.type === "industry") {
+                  const ids = Array.from(
+                    new Set(
+                      domainResults
+                        .filter(
+                          d => d.type === "industry" && d.industry === item.title
+                        )
+                        .map(d => d.startup.id)
+                    )
+                  );
 
+                  setAppliedFilterIds(ids); 
+                }
                 setIsOpen(false);
               }
 
@@ -253,6 +285,7 @@ function App() {
                 setSuggestions([]);
                 setIsOpen(false);
                 setHighlightedIndex(-1);
+                setAppliedFilterIds(null);
               }}
               className="
                 text-muted-foreground
@@ -281,6 +314,10 @@ function App() {
               shadow-xl z-50
               overflow-hidden
             "
+            style={{
+              maxHeight: "min(70vh,520px)",
+              overflowY: "auto",
+            }}
           >
             {/* ================= STARTUPS ================= */}
             {domainResults.some(r => r.type === "startup") && (
@@ -295,6 +332,9 @@ function App() {
 
                     return (
                       <ResultItem
+                        ref={(el: HTMLButtonElement | null) => {
+                          itemRefs.current[index] = el;
+                        }}
                         key={r.startup.id}
                         title={r.startup.name}
                         subtitle="Startup"
@@ -313,32 +353,37 @@ function App() {
             )}
 
             {/* ================= INDUSTRIES ================= */}
-            {domainResults.some(r => r.type === "industry") && (
-              <SectionBlock title="Industries">
-                {domainResults
-                  .filter(r => r.type === "industry")
-                  .slice(0, 3)
-                  .map((r) => {
-                    const index = uiResults.findIndex(
-                      u => u.key === `industry-${r.industry}`
-                    );
+            <SectionBlock title="Industries">
+              {uniqueIndustries.slice(0, 5).map((r) => {
+                const index = uiResults.findIndex(
+                  u => u.key === `industry-${r.industry}`
+                );
 
-                    return (
-                      <ResultItem
-                        key={r.industry}
-                        title={r.industry}
-                        subtitle="Industry"
-                        icon={<ResultIcon type="industry" />}
-                        active={index === activeIndex}
-                        onClick={() => {
-                          setIsOpen(false);
-                        }}
-                      />
-                    );
-                  })}
-              </SectionBlock>
-            )}
+                return (
+                  <ResultItem
+                    ref={(el: HTMLButtonElement | null) => {
+                      itemRefs.current[index] = el;
+                    }}
+                    title={r.industry}
+                    subtitle="Industry"
+                    icon={<ResultIcon type="industry" />}
+                    active={index === activeIndex}
+                    onClick={() => {
+                      const ids = Array.from(
+                        new Set(
+                          domainResults
+                            .filter(d => d.type === "industry" && d.industry === r.industry)
+                            .map(d => d.startup.id)
+                        )
+                      );
 
+                      setAppliedFilterIds(ids);
+                      setIsOpen(false);
+                    }}
+                  />
+                );
+              })}
+            </SectionBlock>
             {/* ================= JOBS ================= */}
             {domainResults.some(r => r.type === "job") && (
               <SectionBlock title="Jobs">
@@ -352,6 +397,9 @@ function App() {
 
                     return (
                       <ResultItem
+                        ref={(el: HTMLButtonElement | null) => {
+                          itemRefs.current[index] = el;
+                        }}
                         key={`${r.jobTitle}-${r.startup.id}`}
                         title={r.jobTitle}
                         subtitle={r.startup.name}
@@ -379,6 +427,9 @@ function App() {
 
                   return (
                     <ResultItem
+                      ref={(el: HTMLButtonElement | null) => {
+                        itemRefs.current[index] = el;
+                      }}
                       key={place.id}
                       title={place.label}
                       icon={<ResultIcon type="location" />}
@@ -400,7 +451,7 @@ function App() {
         ref = {globeRef}
         startups={startups}
         activeId={selectedId}
-        filteredIds={matchedIds.length > 0 ? matchedIds : undefined}
+        filteredIds={appliedFilterIds??undefined}
         onMarkerClick={(id) => {
           setSelectedId(id);
           setOpen(true);
@@ -412,7 +463,10 @@ function App() {
         onOpenChange={(v) => {
           setOpen(v);
           setIsOpen(false);
-          if (!v) setSelectedId(null);
+          if (!v){
+            setSelectedId(null);
+            setAppliedFilterIds(null);
+          }    
         }}
       >
         <SheetContent side="right" className="w-105 sm:w-120 overflow-y-auto bg-background/95 backdrop-blur-xl border-l shadow-2xl px-6 py-6">
@@ -608,7 +662,7 @@ function SectionBlock({
 }) {
   return (
     <div className="border-b last:border-b-0">
-      <p className="px-4 pt-3 pb-1 text-xs font-semibold text-muted-foreground uppercase">
+      <p className="sticky top-0 z-10 bg-background/95 backdrop-blur px-4 pt-3 pb-1 text-xs font-semibold text-muted-foreground uppercase">
         {title}
       </p>
       <div>{children}</div>
@@ -616,26 +670,27 @@ function SectionBlock({
   );
 }
 
-function ResultItem({
-  title,
-  subtitle,
-  icon,
-  badge,
-  active,
-  onClick,
-}: {
-  title: string;
-  subtitle?: string;
-  icon: React.ReactNode;
-  badge?: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+const ResultItem = forwardRef<
+  HTMLButtonElement,
+  {
+    title: string;
+    subtitle?: string;
+    icon: React.ReactNode;
+    badge?: string;
+    active: boolean;
+    onClick: () => void;
+  }
+>(function ResultItem(
+  { title, subtitle, icon, badge, active, onClick },
+  ref
+) {
   return (
     <button
+      ref={ref}
       onClick={onClick}
       className={`
         w-full px-4 py-3 flex items-center gap-3 text-left
+        transition
         ${active ? "bg-muted" : "hover:bg-muted"}
       `}
     >
@@ -661,8 +716,7 @@ function ResultItem({
       )}
     </button>
   );
-}
-
+});
 function ResultIcon({
   type,
 }: {

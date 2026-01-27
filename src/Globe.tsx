@@ -12,6 +12,12 @@ import {
   MapControls,
 } from "@/components/map";
 
+type CameraState = {
+  zoom: number;
+  pitch: number;
+  bearing: number;
+};
+
 type GlobeProps = {
   startups: Startup[];
   activeId: string | null;
@@ -38,6 +44,8 @@ const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
     startup: Startup;
   } | null>(null);
 
+  const previousCameraRef = useRef<CameraState | null>(null);
+
   const filteredGeoJson = {
     ...startupsGeoJson,
     features: filteredIds
@@ -47,20 +55,62 @@ const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
       : startupsGeoJson.features,
   };
 
+  const [animatedGeoJson, setAnimatedGeoJson] = useState(filteredGeoJson);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      setAnimatedGeoJson(filteredGeoJson);
+    });
+
+    return () => cancelAnimationFrame(id);
+  }, [filteredGeoJson]);
+
   // Fly to active startup
   useEffect(() => {
     if (!activeId || !mapRef.current) return;
 
     const company = startups.find((s) => s.id === activeId);
     if (!company) return;
-
+    
+    if (!previousCameraRef.current) {
+      previousCameraRef.current = {
+        zoom: mapRef.current.getZoom(),
+        pitch: mapRef.current.getPitch(),
+        bearing: mapRef.current.getBearing(),
+      };
+    }
     mapRef.current.flyTo({
       center: [company.location.lng, company.location.lat],
-      zoom: 25,
-      duration: 1200,
+      zoom: 18,
+      pitch: 55,        // tilt the camera
+      bearing: 0,
+      speed: 0.7,        
+      curve: 1.2,        
+      easing: (t) => t,  
       essential: true,
     });
   }, [activeId, startups]);
+
+  useEffect(() => {
+    if (activeId !== null) return;
+    if (!mapRef.current) return;
+    if (!previousCameraRef.current) return;
+
+    const map = mapRef.current;
+    const prev = previousCameraRef.current;
+
+    map.flyTo({
+      zoom: prev.zoom,
+      pitch: prev.pitch,
+      bearing: prev.bearing,
+      speed: 0.9,
+      curve: 1.3,
+      easing: (t) => t,
+      essential: true,
+    });
+
+    previousCameraRef.current = null;
+  }, [activeId]);
 
   return (
     <Map
@@ -75,10 +125,14 @@ const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
     >
       {/* Cluster layer */}
       <MapClusterLayer<{ id: string }>
-        data={filteredGeoJson}
+        data={animatedGeoJson}
         clusterMaxZoom={7}
-        clusterRadius={10}
-        clusterColors={["#14b8a6", "#2563eb", "#7c3aed"]}
+        clusterRadius={50} 
+        clusterColors={[
+          "#64748b", // low hiring
+          "#22c55e", // moderate hiring
+          "#8b5cf6", // high hiring
+        ]}
         clusterThresholds={[10, 100]}
         pointColor="#094944"
 
