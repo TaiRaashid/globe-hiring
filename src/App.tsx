@@ -1,22 +1,18 @@
 import Globe from "./Globe";
 import { startups } from "@/data/startups";
-import { useEffect, useRef, useState, forwardRef} from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MapRef } from "@/components/map";
-import { geocodeSuggestions, type GeocodeSuggestion } from "@/utils/geocode";
+import { geocodeSuggestions, type GeocodeSuggestion } from "@/services/geocode";
 import { useDebounce } from "@/hooks/useDebounce";
-import { buildSearchIndex, searchIndex } from "@/utils/search";
+import { buildSearchIndex, searchIndex } from "@/services/searchIndex";
+import { SearchBar } from "./components/search/SearchBar";
+import { type UIResult } from "./types/search";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  Building2,
-  Briefcase,
-  Layers,
-  MapPin,
-} from "lucide-react";
 
 function App() {
   const [open, setOpen] = useState(false);
@@ -29,7 +25,6 @@ function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [suggestions, setSuggestions] = useState<GeocodeSuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const searchIndexRef = useRef(buildSearchIndex(startups));
   const domainResults = searchIndex(searchIndexRef.current, debouncedQuery);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
@@ -37,33 +32,26 @@ function App() {
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [appliedFilterIds, setAppliedFilterIds] = useState<string[] | null>(null);
 
-  type UIResult =
-    | {
-        key: string;
-        type: "startup";
-        title: string;
-        subtitle: string;
-        startupId: string;
-      }
-    | {
-        key: string;
-        type: "industry";
-        title: string;
-      }
-    | {
-        key: string;
-        type: "job";
-        title: string;
-        subtitle: string;
-        startupId: string;
-        isHiring: boolean;
-      }
-    | {
-        key: string;
-        type: "location";
-        title: string;
-        place: GeocodeSuggestion;
-      };
+  const industryMap = new Map<string, Set<string>>();
+
+  for (const r of domainResults) {
+    if (r.type !== "industry") continue;
+
+    const key = r.industry.toLowerCase();
+
+    if (!industryMap.has(key)) {
+      industryMap.set(key, new Set());
+    }
+
+    industryMap.get(key)!.add(r.startup.id);
+  }
+
+  const uniqueIndustries = Array.from(industryMap.entries()).map(
+      ([industry,startupSet]) => ({
+        industry,
+        count: startupSet.size,
+      })
+  );
 
   const uiResults: UIResult[] = [
     ...domainResults
@@ -77,13 +65,13 @@ function App() {
         startupId: r.startup.id,
       })),
 
-    ...domainResults
-      .filter(r => r.type === "industry")
+    ...uniqueIndustries
       .slice(0, 3)
       .map(r => ({
-        key: `industry-${r.industry}`,
+        key: `industry-${r.industry.toLowerCase()}`,
         type: "industry" as const,
         title: r.industry,
+        count: r.count,
       })),
 
     ...domainResults
@@ -105,14 +93,6 @@ function App() {
       place,
     })),
   ];
-
-  const uniqueIndustries = Array.from(
-    new Map(
-      domainResults
-        .filter(r => r.type === "industry")
-        .map(r => [r.industry.toLowerCase(), r])
-    ).values()
-  );
 
   useEffect(() => {
     if (!debouncedQuery) {
@@ -172,9 +152,6 @@ function App() {
       });
     }
   }
-  useEffect(() => {
-    setHighlightedIndex(suggestions.length > 0 ? 0 : -1);
-  }, [suggestions]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -204,255 +181,50 @@ function App() {
     });
   }, [activeIndex]);
 
+  useEffect(() => {
+    if (!query.trim()) {
+      setAppliedFilterIds(null);
+    }
+  }, [query]);
+
   return (
     <div className="relative w-screen h-screen">
-      <div
-        ref={searchContainerRef}
-        className="
-          absolute top-4 left-1/2 -translate-x-1/2 z-30
-          w-[90%] max-w-2xl
-        "
-      >
-        <div className="
-          flex items-center gap-3
-          rounded-full
-          bg-background/90
-          backdrop-blur-xl
-          border
-          px-5 py-3
-          shadow-lg
-        ">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (!isOpen || uiResults.length === 0) return;
-
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setActiveIndex(i => (i + 1) % uiResults.length);
-              }
-
-              if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setActiveIndex(i =>
-                  i <= 0 ? uiResults.length - 1 : i - 1
-                );
-              }
-
-              if (e.key === "Enter") {
-                e.preventDefault();
-                const item = uiResults[activeIndex];
-                if (!item) return;
-
-                if (item.type === "location") {
-                  handlePlaceSelect(item.place);
-                }
-
-                if (item.type === "startup" || item.type === "job") {
-                  setSelectedId(item.startupId);
-                  setOpen(true);
-                }
-                
-                if (item.type === "industry") {
-                  const ids = Array.from(
-                    new Set(
-                      domainResults
-                        .filter(
-                          d => d.type === "industry" && d.industry === item.title
-                        )
-                        .map(d => d.startup.id)
-                    )
-                  );
-
-                  setAppliedFilterIds(ids); 
-                }
-                setIsOpen(false);
-              }
-
-              if (e.key === "Escape") {
-                setIsOpen(false);
-              }
-            }}
-            placeholder="Search a place on the map…"
-            className="flex-1 bg-transparent outline-none text-sm"
-          />
-
-          {query && (
-            <button
-              onClick={() => {
-                setQuery("");
-                setSuggestions([]);
-                setIsOpen(false);
-                setHighlightedIndex(-1);
-                setAppliedFilterIds(null);
-              }}
-              className="
-                text-muted-foreground
-                hover:text-foreground
-                transition
-                px-1
-              "
-              aria-label="Clear search"
-            >
-              ✕
-            </button>
-          )}
-
-          {isSearching && (
-            <div className="text-xs text-muted-foreground animate-pulse">
-              Searching…
-            </div>
-          )}
-        </div>
-        {isOpen && uiResults.length > 0 && (
-          <div
-            className="
-              absolute top-full mt-2 w-full
-              rounded-2xl border
-              bg-background/95 backdrop-blur-xl
-              shadow-xl z-50
-              overflow-hidden
-            "
-            style={{
-              maxHeight: "min(70vh,520px)",
-              overflowY: "auto",
-            }}
-          >
-            {/* ================= STARTUPS ================= */}
-            {domainResults.some(r => r.type === "startup") && (
-              <SectionBlock title="Startups">
-                {domainResults
-                  .filter(r => r.type === "startup")
-                  .slice(0, 5)
-                  .map((r) => {
-                    const index = uiResults.findIndex(
-                      u => u.key === `startup-${r.startup.id}`
-                    );
-
-                    return (
-                      <ResultItem
-                        ref={(el: HTMLButtonElement | null) => {
-                          itemRefs.current[index] = el;
-                        }}
-                        key={r.startup.id}
-                        title={r.startup.name}
-                        subtitle="Startup"
-                        icon={<ResultIcon type="startup" />}
-                        badge={r.startup.jobs.total > 0 ? "Hiring" : undefined}
-                        active={index === activeIndex}
-                        onClick={() => {
-                          setSelectedId(r.startup.id);
-                          setOpen(true);
-                          setIsOpen(false);
-                        }}
-                      />
-                    );
-                  })}
-              </SectionBlock>
-            )}
-
-            {/* ================= INDUSTRIES ================= */}
-            <SectionBlock title="Industries">
-              {uniqueIndustries.slice(0, 5).map((r) => {
-                const index = uiResults.findIndex(
-                  u => u.key === `industry-${r.industry}`
-                );
-
-                return (
-                  <ResultItem
-                    ref={(el: HTMLButtonElement | null) => {
-                      itemRefs.current[index] = el;
-                    }}
-                    title={r.industry}
-                    subtitle="Industry"
-                    icon={<ResultIcon type="industry" />}
-                    active={index === activeIndex}
-                    onClick={() => {
-                      const ids = Array.from(
-                        new Set(
-                          domainResults
-                            .filter(d => d.type === "industry" && d.industry === r.industry)
-                            .map(d => d.startup.id)
-                        )
-                      );
-
-                      setAppliedFilterIds(ids);
-                      setIsOpen(false);
-                    }}
-                  />
-                );
-              })}
-            </SectionBlock>
-            {/* ================= JOBS ================= */}
-            {domainResults.some(r => r.type === "job") && (
-              <SectionBlock title="Jobs">
-                {domainResults
-                  .filter(r => r.type === "job")
-                  .slice(0, 5)
-                  .map((r) => {
-                    const index = uiResults.findIndex(
-                      u => u.key === `job-${r.jobTitle}-${r.startup.id}`
-                    );
-
-                    return (
-                      <ResultItem
-                        ref={(el: HTMLButtonElement | null) => {
-                          itemRefs.current[index] = el;
-                        }}
-                        key={`${r.jobTitle}-${r.startup.id}`}
-                        title={r.jobTitle}
-                        subtitle={r.startup.name}
-                        icon={<ResultIcon type="job" />}
-                        badge="Hiring"
-                        active={index === activeIndex}
-                        onClick={() => {
-                          setSelectedId(r.startup.id);
-                          setOpen(true);
-                          setIsOpen(false);
-                        }}
-                      />
-                    );
-                  })}
-              </SectionBlock>
-            )}
-
-            {/* ================= LOCATIONS ================= */}
-            {suggestions.length > 0 && (
-              <SectionBlock title="Locations">
-                {suggestions.slice(0, 5).map((place) => {
-                  const index = uiResults.findIndex(
-                    u => u.key === `location-${place.id}`
-                  );
-
-                  return (
-                    <ResultItem
-                      ref={(el: HTMLButtonElement | null) => {
-                        itemRefs.current[index] = el;
-                      }}
-                      key={place.id}
-                      title={place.label}
-                      icon={<ResultIcon type="location" />}
-                      active={index === activeIndex}
-                      onClick={() => {
-                        handlePlaceSelect(place);
-                        setIsOpen(false);
-                      }}
-                    />
-                  );
-                })}
-              </SectionBlock>
-            )}
-          </div>
-        )}
-      </div>
-
+      <SearchBar
+        query={query}
+        setQuery={setQuery}
+        isSearching={isSearching}
+        isOpen={isOpen}
+        setIsOpen={setIsOpen}
+        setAppliedFilterIds={setAppliedFilterIds}
+        uiResults={uiResults}
+        domainResults={domainResults}
+        uniqueIndustries={uniqueIndustries}
+        suggestions={suggestions}
+        onStartupSelect={(id) => {
+          setSelectedId(id);
+          setOpen(true);
+          setIsOpen(false);
+        }}
+        onIndustrySelect={(industry) => {
+          const ids = Array.from(
+            new Set(
+              domainResults
+                .filter(d => d.type === "industry" && d.industry === industry)
+                .map(d => d.startup.id)
+            )
+          );
+          setAppliedFilterIds(ids);
+          setIsOpen(false);
+        }}
+        onLocationSelect={handlePlaceSelect}
+      />
+          
       <Globe
         ref = {globeRef}
         startups={startups}
         activeId={selectedId}
         filteredIds={appliedFilterIds??undefined}
-        onMarkerClick={(id) => {
+        onMarkerClick={(id: string) => {
           setSelectedId(id);
           setOpen(true);
         }}
@@ -651,89 +423,6 @@ function Info({
       <p className="font-medium">{value}</p>
     </div>
   );
-}
-
-function SectionBlock({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="border-b last:border-b-0">
-      <p className="sticky top-0 z-10 bg-background/95 backdrop-blur px-4 pt-3 pb-1 text-xs font-semibold text-muted-foreground uppercase">
-        {title}
-      </p>
-      <div>{children}</div>
-    </div>
-  );
-}
-
-const ResultItem = forwardRef<
-  HTMLButtonElement,
-  {
-    title: string;
-    subtitle?: string;
-    icon: React.ReactNode;
-    badge?: string;
-    active: boolean;
-    onClick: () => void;
-  }
->(function ResultItem(
-  { title, subtitle, icon, badge, active, onClick },
-  ref
-) {
-  return (
-    <button
-      ref={ref}
-      onClick={onClick}
-      className={`
-        w-full px-4 py-3 flex items-center gap-3 text-left
-        transition
-        ${active ? "bg-muted" : "hover:bg-muted"}
-      `}
-    >
-      {icon}
-
-      <div className="flex-1">
-        <div className="text-sm font-medium">{title}</div>
-        {subtitle && (
-          <div className="text-xs text-muted-foreground">
-            {subtitle}
-          </div>
-        )}
-      </div>
-
-      {badge && (
-        <span className="
-          rounded-full bg-emerald-500/10
-          px-2 py-0.5 text-xs font-medium
-          text-emerald-600
-        ">
-          {badge}
-        </span>
-      )}
-    </button>
-  );
-});
-function ResultIcon({
-  type,
-}: {
-  type: "startup" | "job" | "industry" | "location";
-}) {
-  const className = "h-4 w-4 text-muted-foreground shrink-0";
-
-  switch (type) {
-    case "startup":
-      return <Building2 className={className} />;
-    case "job":
-      return <Briefcase className={className} />;
-    case "industry":
-      return <Layers className={className} />;
-    case "location":
-      return <MapPin className={className} />;
-  }
 }
 
 export default App;
