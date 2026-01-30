@@ -11,7 +11,6 @@ type SearchBarProps = {
 
   isOpen: boolean;
   setIsOpen: (v: boolean) => void;
-  setAppliedFilterIds: (v: string[] | null)=>void;
 
   uiResults: UIResult[];
   domainResults: any[];
@@ -29,7 +28,6 @@ export function SearchBar({
   isSearching,
   isOpen,
   setIsOpen,
-  setAppliedFilterIds,
   uiResults,
   onStartupSelect,
   onIndustrySelect,
@@ -126,7 +124,6 @@ export function SearchBar({
             onClick={() => {
               setQuery("");
               setIsOpen(false);
-              setAppliedFilterIds(null);
             }}
             className="text-muted-foreground hover:text-foreground transition px-1"
           >

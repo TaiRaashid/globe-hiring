@@ -4,7 +4,7 @@ import { forwardRef,useEffect, useRef, useState } from "react";
 import type { MapRef } from "@/components/map";
 import type { Startup } from "./types/startup";
 import { startupsGeoJson } from "@/data/startups-geojson";
-
+import { type Filters } from "./types/filters";
 import {
   Map,
   MapClusterLayer,
@@ -21,12 +21,12 @@ type CameraState = {
 type GlobeProps = {
   startups: Startup[];
   activeId: string | null;
-  filteredIds?: string[];
+  filters: Filters;
   onMarkerClick?: (id: string) => void;
 };
 
 const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
-  { startups, activeId, filteredIds, onMarkerClick },
+  { startups, activeId, filters, onMarkerClick },
   ref
 ) {
   const mapRef = useRef<MapRef | null>(null);
@@ -48,11 +48,27 @@ const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
 
   const filteredGeoJson = {
     ...startupsGeoJson,
-    features: filteredIds
-      ? startupsGeoJson.features.filter((f) =>
-          filteredIds.includes(f.properties?.id)
+    features: startupsGeoJson.features.filter((f) => {
+      const id = f.properties?.id;
+      const s = startups.find((x) => x.id === id);
+      if (!s) return false;
+
+      if (
+        filters.industries.length &&
+        !filters.industries.some((i: string) =>
+          s.industries.map((x) => x.toLowerCase()).includes(i.toLowerCase())
         )
-      : startupsGeoJson.features,
+      ) return false;
+
+      if (
+        filters.workModes.length &&
+        !filters.workModes.includes(s.work_mode)
+      ) return false;
+
+      if (filters.hiringOnly && s.jobs.total === 0) return false;
+
+      return true;
+    }),
   };
 
   const [animatedGeoJson, setAnimatedGeoJson] = useState(filteredGeoJson);

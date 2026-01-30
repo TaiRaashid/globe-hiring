@@ -7,6 +7,9 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { buildSearchIndex, searchIndex } from "@/services/searchIndex";
 import { SearchBar } from "./components/search/SearchBar";
 import { type UIResult } from "./types/search";
+import { type Filters } from "@/types/filters";
+import { FilterPanel } from "@/components/filters/FilterPanel";
+import { ActiveFilters } from "@/components/filters/ActiveFilters";
 import {
   Sheet,
   SheetContent,
@@ -30,7 +33,20 @@ function App() {
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState<number>(-1);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [appliedFilterIds, setAppliedFilterIds] = useState<string[] | null>(null);
+  const [filters, setFilters] = useState<Filters>({
+    industries: [],
+    workModes: [],
+    hiringOnly: false,
+  });
+
+  const availableIndustries = Array.from(
+    startups.reduce((map, s) => {
+      s.industries.forEach((i) => {
+        map.set(i, (map.get(i) ?? 0) + 1);
+      });
+      return map;
+    }, new Map<string, number>())
+  ).map(([name, count]) => ({ name, count }));
 
   const industryMap = new Map<string, Set<string>>();
 
@@ -181,12 +197,6 @@ function App() {
     });
   }, [activeIndex]);
 
-  useEffect(() => {
-    if (!query.trim()) {
-      setAppliedFilterIds(null);
-    }
-  }, [query]);
-
   return (
     <div className="relative w-screen h-screen">
       <SearchBar
@@ -195,7 +205,6 @@ function App() {
         isSearching={isSearching}
         isOpen={isOpen}
         setIsOpen={setIsOpen}
-        setAppliedFilterIds={setAppliedFilterIds}
         uiResults={uiResults}
         domainResults={domainResults}
         uniqueIndustries={uniqueIndustries}
@@ -205,25 +214,38 @@ function App() {
           setOpen(true);
           setIsOpen(false);
         }}
-        onIndustrySelect={(industry) => {
-          const ids = Array.from(
-            new Set(
-              domainResults
-                .filter(d => d.type === "industry" && d.industry === industry)
-                .map(d => d.startup.id)
-            )
-          );
-          setAppliedFilterIds(ids);
+        onIndustrySelect={() => {
           setIsOpen(false);
         }}
         onLocationSelect={handlePlaceSelect}
       />
-          
+      
+      <FilterPanel
+        filters={filters}
+        setFilters={setFilters}
+        availableIndustries={availableIndustries}
+      />
+
+      <ActiveFilters
+        filters={filters}
+        onRemove={(key, value) => {
+          if (key === "hiringOnly") {
+            setFilters({ ...filters, hiringOnly: false });
+            return;
+          }
+
+          setFilters({
+            ...filters,
+            [key]: filters[key].filter((v: string) => v !== value),
+          });
+        }}
+      />
+
       <Globe
         ref = {globeRef}
         startups={startups}
         activeId={selectedId}
-        filteredIds={appliedFilterIds??undefined}
+        filters={filters}
         onMarkerClick={(id: string) => {
           setSelectedId(id);
           setOpen(true);
@@ -237,7 +259,6 @@ function App() {
           setIsOpen(false);
           if (!v){
             setSelectedId(null);
-            setAppliedFilterIds(null);
           }    
         }}
       >
