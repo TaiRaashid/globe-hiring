@@ -50,6 +50,8 @@ export function SearchDropdown({
   
   return (
     <div
+      role="option"
+      aria-label="Search Results"
       className="
         absolute top-full mt-2 w-full
         rounded-2xl border

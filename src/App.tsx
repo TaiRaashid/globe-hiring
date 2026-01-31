@@ -10,11 +10,16 @@ import { type UIResult } from "./types/search";
 import { type Filters } from "@/types/filters";
 import { FilterPanel } from "@/components/filters/FilterPanel";
 import { ActiveFilters } from "@/components/filters/ActiveFilters";
+import { useFilterUrlSync } from "@/hooks/useFilterUrlSync";
+import { useIsMobile } from "./hooks/useIsMobile";
+import { Button } from "./components/ui/button";
+import { useSwipeDown } from "@/hooks/useSwipeDown";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetTrigger
 } from "@/components/ui/sheet";
 
 function App() {
@@ -33,10 +38,24 @@ function App() {
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState<number>(-1);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const isMobile = useIsMobile();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const searchSwipe = useSwipeDown(() => setMobileSearchOpen(false));
+  const filterSwipe = useSwipeDown(() => setFiltersOpen(false));
+  const detailSwipe = useSwipeDown(() => setOpen(false));
+
   const [filters, setFilters] = useState<Filters>({
     industries: [],
     workModes: [],
     hiringOnly: false,
+  });
+  
+  useFilterUrlSync({
+    filters,
+    setFilters,
+    activeId: selectedId,
+    setActiveId: setSelectedId,
   });
 
   const availableIndustries = Array.from(
@@ -197,34 +216,110 @@ function App() {
     });
   }, [activeIndex]);
 
+  useEffect(() => {
+    if (mobileSearchOpen || filtersOpen || open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+  }, [mobileSearchOpen, filtersOpen, open]);
+
   return (
     <div className="relative w-screen h-screen">
-      <SearchBar
-        query={query}
-        setQuery={setQuery}
-        isSearching={isSearching}
-        isOpen={isOpen}
-        setIsOpen={setIsOpen}
-        uiResults={uiResults}
-        domainResults={domainResults}
-        uniqueIndustries={uniqueIndustries}
-        suggestions={suggestions}
-        onStartupSelect={(id) => {
-          setSelectedId(id);
-          setOpen(true);
-          setIsOpen(false);
-        }}
-        onIndustrySelect={() => {
-          setIsOpen(false);
-        }}
-        onLocationSelect={handlePlaceSelect}
-      />
+      {/* Search */}
+      {isMobile ? (
+        <Sheet open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+          <SheetTrigger asChild>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="absolute top-4 left-1/2 -translate-x-1/2 z-30"
+            >
+              Search
+            </Button>
+          </SheetTrigger>
+
+          <SheetContent side="top" className="h-full" {...searchSwipe}>
+            <SheetHeader>
+              <SheetTitle>Search</SheetTitle>
+            </SheetHeader>
+            <div className="px-4">
+              <SearchBar
+                variant="mobile"
+                query={query}
+                setQuery={setQuery}
+                isSearching={isSearching}
+                isOpen={true}
+                setIsOpen={() => {}}
+                uiResults={uiResults}
+                domainResults={domainResults}
+                uniqueIndustries={uniqueIndustries}
+                suggestions={suggestions}
+                onStartupSelect={(id) => {
+                  setSelectedId(id);
+                  setOpen(true);
+                  setMobileSearchOpen(false);
+                }}
+                onIndustrySelect={(industry) => {
+                  setFilters({ ...filters, industries: [industry] });
+                  setMobileSearchOpen(false);
+                }}
+                onLocationSelect={handlePlaceSelect}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <SearchBar
+          variant="desktop"
+          query={query}
+          setQuery={setQuery}
+          isSearching={isSearching}
+          isOpen={isOpen}
+          setIsOpen={setIsOpen}
+          uiResults={uiResults}
+          domainResults={domainResults}
+          uniqueIndustries={uniqueIndustries}
+          suggestions={suggestions}
+          onStartupSelect={(id) => {
+            setSelectedId(id);
+            setOpen(true);
+          }}
+          onIndustrySelect={(industry) =>
+            setFilters({ ...filters, industries: [industry] })
+          }
+          onLocationSelect={handlePlaceSelect}
+        />
+      )}
       
-      <FilterPanel
-        filters={filters}
-        setFilters={setFilters}
-        availableIndustries={availableIndustries}
-      />
+      {/* Filters */}
+        {isMobile ? (
+          <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+            <SheetTrigger asChild>
+              <Button
+                size="sm"
+                className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30"
+              >
+                Filters
+              </Button>
+            </SheetTrigger>
+
+            <SheetContent side="bottom" className="h-[85vh]" {...filterSwipe}>
+              <FilterPanel
+                filters={filters}
+                setFilters={setFilters}
+                availableIndustries={availableIndustries}
+              />
+            </SheetContent>
+          </Sheet>
+        ) : (
+          <FilterPanel
+            filters={filters}
+            setFilters={setFilters}
+            availableIndustries={availableIndustries}
+          />
+        )}
+
 
       <ActiveFilters
         filters={filters}
@@ -262,7 +357,15 @@ function App() {
           }    
         }}
       >
-        <SheetContent side="right" className="w-105 sm:w-120 overflow-y-auto bg-background/95 backdrop-blur-xl border-l shadow-2xl px-6 py-6">
+        <SheetContent
+          side={isMobile ? "bottom" : "right"}
+          className={`${
+            isMobile
+              ? "h-[85vh]"
+              : "w-105 sm:w-120"
+          } overflow-y-auto bg-background/95 backdrop-blur-xl border-l shadow-2xl px-6 py-6`}
+          {...(isMobile ? detailSwipe : {})}
+        >
           {selected && (
               <>
               {/* Header */}

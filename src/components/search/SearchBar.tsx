@@ -4,25 +4,24 @@ import type { GeocodeSuggestion } from "@/services/geocode";
 import { SearchDropdown } from "./SearchDropdown";
 
 type SearchBarProps = {
+  variant?: "desktop" | "mobile";
   query: string;
   setQuery: (v: string) => void;
-
   isSearching: boolean;
-
   isOpen: boolean;
   setIsOpen: (v: boolean) => void;
-
   uiResults: UIResult[];
   domainResults: any[];
   uniqueIndustries: any[];
   suggestions: GeocodeSuggestion[];
-
   onStartupSelect: (id: string) => void;
   onIndustrySelect: (industry: string) => void;
   onLocationSelect: (place: GeocodeSuggestion) => void;
 };
 
+
 export function SearchBar({
+  variant = "desktop",
   query,
   setQuery,
   isSearching,
@@ -37,6 +36,7 @@ export function SearchBar({
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const navigableResults = uiResults;
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Reset active index when results change
   useEffect(() => {
@@ -67,76 +67,105 @@ export function SearchBar({
     });
   }, [activeIndex]);
 
+  useEffect(() => {
+    if (variant === "mobile") {
+      // Small timeout helps on iOS Safari
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  }, [variant]);
+
   return (
     <div
       ref={containerRef}
-      className="absolute top-4 left-1/2 -translate-x-1/2 z-30 w-[90%] max-w-2xl"
+      className={
+        variant === "desktop"
+          ? "absolute top-4 left-1/2 -translate-x-1/2 z-30 w-[90%] max-w-2xl"
+          : "relative w-full"
+      }
     >
-      <div className="flex items-center gap-3 rounded-full bg-background/90 backdrop-blur-xl border px-5 py-3 shadow-lg">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (!isOpen || uiResults.length === 0) return;
+      <div
+        className={
+          variant === "mobile"
+            ? "sticky top-0 z-10 bg-background pb-2"
+            : ""
+        }
+      >
+        <div 
+          className={
+            variant === "desktop"
+              ? "flex items-center gap-3 rounded-full bg-background/90 backdrop-blur-xl border px-5 py-3 shadow-lg"
+              : "flex items-center gap-3 rounded-xl bg-background border px-4 py-3"
+          }
+        >
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (!isOpen || uiResults.length === 0) return;
 
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setActiveIndex((i) => i + 1 >= navigableResults.length ? 0 : i + 1);
-            }
-
-            if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setActiveIndex((i) =>
-                i <= 0 ? navigableResults.length - 1 : i - 1
-              );
-            }
-
-            if (e.key === "Enter") {
-              e.preventDefault();
-              const item = uiResults[activeIndex];
-              if (!item) return;
-
-              if (item.type === "startup" || item.type === "job") {
-                onStartupSelect(item.startupId);
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setIsOpen(true);
+                setActiveIndex((i) => i + 1 >= navigableResults.length ? 0 : i + 1);
               }
 
-              if (item.type === "industry") {
-                onIndustrySelect(item.title);
+              if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActiveIndex((i) =>
+                  i <= 0 ? navigableResults.length - 1 : i - 1
+                );
               }
 
-              if (item.type === "location") {
-                onLocationSelect(item.place);
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const item = uiResults[activeIndex];
+                if (!item) return;
+
+                if (item.type === "startup" || item.type === "job") {
+                  onStartupSelect(item.startupId);
+                }
+
+                if (item.type === "industry") {
+                  onIndustrySelect(item.title);
+                }
+
+                if (item.type === "location") {
+                  onLocationSelect(item.place);
+                }
+
+                setIsOpen(false);
               }
 
-              setIsOpen(false);
-            }
-
-            if (e.key === "Escape") {
-              setIsOpen(false);
-            }
-          }}
-          placeholder="Search startups, jobs, industries, locations…"
-          className="flex-1 bg-transparent outline-none text-sm"
-        />
-
-        {query && (
-          <button
-            onClick={() => {
-              setQuery("");
-              setIsOpen(false);
+              if (e.key === "Escape") {
+                setIsOpen(false);
+              }
             }}
-            className="text-muted-foreground hover:text-foreground transition px-1"
-          >
-            ✕
-          </button>
-        )}
+            placeholder="Search startups, jobs, industries, locations…"
+            className="flex-1 bg-transparent outline-none text-sm"
+          />
 
-        {isSearching && (
-          <span className="text-xs text-muted-foreground animate-pulse">
-            Searching…
-          </span>
-        )}
-      </div>
+          {query && (
+            <button
+              onClick={() => {
+                setQuery("");
+                setIsOpen(false);
+              }}
+              className="text-muted-foreground hover:text-foreground transition px-1"
+            >
+              ✕
+            </button>
+          )}
+
+          {isSearching && (
+            <span className="text-xs text-muted-foreground animate-pulse">
+              Searching…
+            </span>
+          )}
+        </div>
+    </div>
 
       <SearchDropdown
         isOpen={isOpen}

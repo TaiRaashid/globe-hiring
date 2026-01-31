@@ -24,10 +24,12 @@ export const ResultItem = forwardRef<
 ) {
   return (
     <button
+      role="option"
+      aria-selected={active}
       ref={ref}
       onClick={onClick}
       className={`
-        w-full px-4 py-3 flex items-center gap-3 text-left
+        w-full px-4 py-4 min-h-11 flex items-center gap-3 text-left
         transition
         ${active ? "bg-muted" : "hover:bg-muted"}
       `}
