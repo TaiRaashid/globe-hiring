@@ -14,6 +14,9 @@ import { useFilterUrlSync } from "@/hooks/useFilterUrlSync";
 import { useIsMobile } from "./hooks/useIsMobile";
 import { Button } from "./components/ui/button";
 import { useSwipeDown } from "@/hooks/useSwipeDown";
+import { ExplorePresets } from "@/components/discovery/ExplorePresets";
+import { useRecentStartups } from "@/hooks/useRecentStartups";
+import { RecentPanel } from "@/components/discovery/RecentPanel";
 import {
   Sheet,
   SheetContent,
@@ -21,6 +24,7 @@ import {
   SheetTitle,
   SheetTrigger
 } from "@/components/ui/sheet";
+import { Suggestions } from "./components/discovery/Suggestions";
 
 function App() {
   const [open, setOpen] = useState(false);
@@ -44,6 +48,7 @@ function App() {
   const searchSwipe = useSwipeDown(() => setMobileSearchOpen(false));
   const filterSwipe = useSwipeDown(() => setFiltersOpen(false));
   const detailSwipe = useSwipeDown(() => setOpen(false));
+  const recent = useRecentStartups();
 
   const [filters, setFilters] = useState<Filters>({
     industries: [],
@@ -258,6 +263,7 @@ function App() {
                 onStartupSelect={(id) => {
                   setSelectedId(id);
                   setOpen(true);
+                  recent.add(id);
                   setMobileSearchOpen(false);
                 }}
                 onIndustrySelect={(industry) => {
@@ -284,6 +290,7 @@ function App() {
           onStartupSelect={(id) => {
             setSelectedId(id);
             setOpen(true);
+            recent.add(id);
           }}
           onIndustrySelect={(industry) =>
             setFilters({ ...filters, industries: [industry] })
@@ -291,6 +298,8 @@ function App() {
           onLocationSelect={handlePlaceSelect}
         />
       )}
+
+      <ExplorePresets filters={filters} setFilters={setFilters} />
       
       {/* Filters */}
         {isMobile ? (
@@ -320,7 +329,6 @@ function App() {
           />
         )}
 
-
       <ActiveFilters
         filters={filters}
         onRemove={(key, value) => {
@@ -344,6 +352,7 @@ function App() {
         onMarkerClick={(id: string) => {
           setSelectedId(id);
           setOpen(true);
+          recent.add(id);
         }}
       />
 
@@ -481,12 +490,29 @@ function App() {
                       </div>
                     </Section>
                   )}
+
+                  <Suggestions
+                    currentId={selected.id}
+                    onSelect={(id) => {
+                      setSelectedId(id);
+                    }}
+                  />
+
                 </div>
               </>
             )}
           </SheetContent>
 
       </Sheet>
+
+      <RecentPanel
+        ids={recent.recent}
+        onSelect={(id) => {
+          setSelectedId(id);
+          setOpen(true);
+        }}
+      />
+
     </div>
   );
 }
