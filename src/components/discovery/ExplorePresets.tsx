@@ -21,7 +21,7 @@ const presets: Preset[] = [
     label: "🧠 AI startups",
     apply: (f) => ({
       ...f,
-      industries: ["AI"],
+      industries: ["AI","Artificial Intelligence"],
     }),
   },
 ];
