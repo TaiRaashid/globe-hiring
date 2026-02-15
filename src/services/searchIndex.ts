@@ -23,36 +23,57 @@ export function searchIndex(
   const q = query.toLowerCase().trim();
   if (q.length < 2) return [];
 
-  const results: SearchResult[] = [];
+  const scored: { result: SearchResult; score: number }[] = [];
 
   for (const item of index) {
+    // startup name
     if (item.name.includes(q)) {
-      results.push({ type: "startup", startup: item.startup });
-      continue;
+      scored.push({
+        result: { type: "startup", startup: item.startup },
+        score: 100 + (item.hiring ? 20 : 0),
+      });
     }
 
+    // jobs
     for (const job of item.jobs) {
       if (job.includes(q)) {
-        results.push({
-          type: "job",
-          startup: item.startup,
-          jobTitle: job,
+        scored.push({
+          result: {
+            type: "job",
+            startup: item.startup,
+            jobTitle: job,
+          },
+          score: 60 + (item.hiring ? 20 : 0),
         });
         break;
       }
     }
 
+    // industry
     for (const ind of item.industries) {
       if (ind.includes(q)) {
-        results.push({
-          type: "industry",
-          startup: item.startup,
-          industry: ind,
+        scored.push({
+          result: {
+            type: "industry",
+            startup: item.startup,
+            industry: ind,
+          },
+          score: 40,
         });
         break;
       }
+    }
+
+    // city
+    if (item.city.includes(q)) {
+      scored.push({
+        result: { type: "startup", startup: item.startup },
+        score: 30,
+      });
     }
   }
 
-  return results;
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .map(s => s.result);
 }

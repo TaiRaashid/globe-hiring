@@ -49,7 +49,6 @@ function App() {
   const filterSwipe = useSwipeDown(() => setFiltersOpen(false));
   const detailSwipe = useSwipeDown(() => setOpen(false));
   const recent = useRecentStartups();
-
   const [filters, setFilters] = useState<Filters>({
     industries: [],
     workModes: [],
