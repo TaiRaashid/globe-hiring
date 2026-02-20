@@ -25,6 +25,7 @@ import {
   SheetTrigger
 } from "@/components/ui/sheet";
 import { Suggestions } from "./components/discovery/Suggestions";
+import { ComparePanel } from "@/components/compare/ComparePanel";
 
 function App() {
   const [open, setOpen] = useState(false);
@@ -49,6 +50,8 @@ function App() {
   const filterSwipe = useSwipeDown(() => setFiltersOpen(false));
   const detailSwipe = useSwipeDown(() => setOpen(false));
   const recent = useRecentStartups();
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>({
     industries: [],
     workModes: [],
@@ -132,6 +135,18 @@ function App() {
       place,
     })),
   ];
+
+  function toggleCompare(id: string) {
+    setCompareIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= 3) return prev; // max 3
+      return [...prev, id];
+    });
+  }
+
+  function removeCompare(id: string) {
+    setCompareIds((prev) => prev.filter((x) => x !== id));
+  }
 
   useEffect(() => {
     if (!debouncedQuery) {
@@ -343,6 +358,31 @@ function App() {
         }}
       />
 
+      {compareIds.length >= 2 && (
+        <Button
+          size="sm"
+          className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 shadow-lg"
+          onClick={() => setCompareOpen(true)}
+        >
+          Compare ({compareIds.length})
+        </Button>
+      )}
+
+      <Sheet open={compareOpen} onOpenChange={setCompareOpen}>
+        <SheetContent side="bottom" className="h-[80vh]">
+          <SheetHeader>
+            <SheetTitle>Startup comparison</SheetTitle>
+          </SheetHeader>
+
+          <ComparePanel
+            startups={compareIds
+              .map((id) => startups.find((s) => s.id === id))
+              .filter(Boolean) as any}
+            onRemove={removeCompare}
+          />
+        </SheetContent>
+      </Sheet>
+
       <Globe
         ref = {globeRef}
         startups={startups}
@@ -377,10 +417,19 @@ function App() {
           {selected && (
               <>
               {/* Header */}
-                <SheetHeader className="pb-6 border-b">
+                <SheetHeader className="pb-6 border-b flex items-center justify-between gap-3">
                   <SheetTitle className="text-2xl tracking-tight">
                     {selected.name}
                   </SheetTitle>
+    
+                  <Button
+                    size="sm"
+                    variant={compareIds.includes(selected.id) ? "secondary" : "outline"}
+                    onClick={() => toggleCompare(selected.id)}
+                  >
+                    {compareIds.includes(selected.id) ? "Added" : "Compare"}
+                  </Button>
+    
                   <div className="flex flex-wrap gap-2 mt-2">
                     {selected.industries.map((i) => (
                       <span
