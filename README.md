@@ -72,4 +72,19 @@ This project is NOT just frontend — it showcases:
 
 ---
 
+##  Future Improvements
 
+- Real-time data updates  
+- User personalization (saved searches, alerts)  
+- Advanced analytics (startup comparisons)  
+- Backend scaling (caching, indexing)
+
+---
+
+##  Installation & Setup
+
+```bash
+git clone https://github.com/TaiRaashid/globe-hiring
+cd globe-hiring
+npm install
+npm start
