@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef,useEffect, useRef, useState } from "react";
+import { forwardRef,useEffect, useMemo, useRef, useState } from "react";
 import type { MapRef } from "@/components/map";
 import type { Startup } from "./types/startup";
 import { startupsGeoJson } from "@/data/startups-geojson";
@@ -46,40 +46,32 @@ const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
 
   const previousCameraRef = useRef<CameraState | null>(null);
 
-  const filteredGeoJson = {
-    ...startupsGeoJson,
-    features: startupsGeoJson.features.filter((f) => {
-      const id = f.properties?.id;
-      const s = startups.find((x) => x.id === id);
-      if (!s) return false;
+  const filteredGeoJson = useMemo(() => {
+    return {
+      ...startupsGeoJson,
+      features: startupsGeoJson.features.filter((f) => {
+        const id = f.properties?.id;
+        const s = startups.find((x) => x.id === id);
+        if (!s) return false;
 
-      if (
-        filters.industries.length &&
-        !filters.industries.some((i: string) =>
-          s.industries.map((x) => x.toLowerCase()).includes(i.toLowerCase())
-        )
-      ) return false;
+        if (
+          filters.industries.length &&
+          !filters.industries.some((i: string) =>
+            s.industries.map((x) => x.toLowerCase()).includes(i.toLowerCase())
+          )
+        ) return false;
 
-      if (
-        filters.workModes.length &&
-        !filters.workModes.includes(s.work_mode)
-      ) return false;
+        if (
+          filters.workModes.length &&
+          !filters.workModes.includes(s.work_mode)
+        ) return false;
 
-      if (filters.hiringOnly && s.jobs.total === 0) return false;
+        if (filters.hiringOnly && s.jobs.total === 0) return false;
 
-      return true;
-    }),
-  };
-
-  const [animatedGeoJson, setAnimatedGeoJson] = useState(filteredGeoJson);
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      setAnimatedGeoJson(filteredGeoJson);
-    });
-
-    return () => cancelAnimationFrame(id);
-  }, [filteredGeoJson]);
+        return true;
+      }),
+    };
+  }, [startups, filters]);
 
   // Fly to active startup
   useEffect(() => {
@@ -136,12 +128,10 @@ const Globe = forwardRef<MapRef, GlobeProps>(function Globe(
       zoom={8}
       minZoom={1.2}
       maxZoom={20}
-      renderWorldCopies={false}
-      fadeDuration={0}
     >
       {/* Cluster layer */}
       <MapClusterLayer<{ id: string }>
-        data={animatedGeoJson}
+        data={filteredGeoJson}
         clusterMaxZoom={7}
         clusterRadius={50} 
         clusterColors={[

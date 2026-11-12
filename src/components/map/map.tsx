@@ -1,7 +1,7 @@
 "use client";
 
-import MapLibreGL, { type PopupOptions, type MarkerOptions } from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
+import * as MapLibreGL from "maplibre-gl";
+import type { PopupOptions, MarkerOptions } from "maplibre-gl";import "maplibre-gl/dist/maplibre-gl.css";
 import {
   createContext,
   forwardRef,
@@ -228,7 +228,13 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
 
   return (
     <MapContext.Provider value={contextValue}>
-      <div ref={containerRef} className="relative w-full h-full">
+      <div
+        ref={containerRef}
+        className={cn(
+          "relative w-full h-full",
+          resolvedTheme === "dark" ? "bg-[#0e0e0e]" : "bg-[#f2f3f0]"
+        )}
+      >
         {!isLoaded && <DefaultLoader />}
         {/* SSR-safe: children render only when map is loaded on client */}
         {mapInstance && children}
