@@ -1,0 +1,27 @@
+{
+  "name": "@globe-hiring/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "predev": "pnpm --filter @globe-hiring/database build",
+    "dev": "tsx watch src/server.ts",
+    "prebuild": "pnpm --filter @globe-hiring/database build",
+    "build": "tsc -p tsconfig.json",
+    "pretypecheck": "pnpm --filter @globe-hiring/database build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.1",
+    "@globe-hiring/database": "workspace:*",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.4",
+    "fastify": "^5.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "tsx": "^4.20.6",
+    "typescript": "~5.9.3"
+  }
+}
