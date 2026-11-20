@@ -8,6 +8,13 @@
       "when": 1794724315520,
       "tag": "0000_giant_yellow_claw",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794953520000,
+      "tag": "0001_company_discovery_and_manual_jobs",
+      "breakpoints": true
     }
   ]
 }

@@ -18,7 +18,13 @@ if (!databaseUrl) {
 }
 
 const { db, client } = createDatabase(databaseUrl);
-const app = await buildApp({ webOrigin, database: db });
+const adminApiToken = process.env.ADMIN_API_TOKEN;
+
+const app = await buildApp({
+  webOrigin,
+  database: db,
+  ...(adminApiToken ? { adminApiToken } : {}),
+});
 
 try {
   await app.listen({ port, host });

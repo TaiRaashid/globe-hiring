@@ -27,3 +27,5 @@ pnpm-debug.log*
 
 # PWA generated files
 **/dev-dist/
+
+backups/

@@ -15,6 +15,7 @@ import { useSwipeDown } from "@/hooks/useSwipeDown";
 import { ExplorePresets } from "@/components/discovery/ExplorePresets";
 import { useRecentStartups } from "@/hooks/useRecentStartups";
 import { RecentPanel } from "@/components/discovery/RecentPanel";
+import { CompanyDirectory } from "@/components/discovery/CompanyDirectory";
 import {
   Sheet,
   SheetContent,
@@ -51,6 +52,7 @@ function App() {
   const recent = useRecentStartups();
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>({
     industries: [],
     workModes: [],
@@ -62,6 +64,47 @@ function App() {
     activeId: selectedId,
     setActiveId: setSelectedId,
   });
+
+  const matchingCompanies = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+
+    return companies
+      .filter((company) => {
+        if (
+          filters.industries.length > 0 &&
+          !filters.industries.some((industry) =>
+            company.industries.some(
+              (item) => item.toLocaleLowerCase() === industry.toLocaleLowerCase(),
+            ),
+          )
+        ) {
+          return false;
+        }
+
+        if (
+          filters.workModes.length > 0 &&
+          (!company.workMode || !filters.workModes.includes(company.workMode))
+        ) {
+          return false;
+        }
+
+        if (!normalizedQuery) return true;
+
+        const searchableFields = [
+          company.name,
+          company.description,
+          company.location?.city,
+          company.location?.region,
+          company.location?.country,
+          ...company.industries,
+        ];
+
+        return searchableFields.some((field) =>
+          field?.toLocaleLowerCase().includes(normalizedQuery),
+        );
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [companies, filters, query]);
 
   const availableIndustries = useMemo(() => {
     const counts = new Map<string, number>();
@@ -262,6 +305,19 @@ function App() {
 
       <ExplorePresets filters={filters} setFilters={setFilters} />
 
+      <CompanyDirectory
+        companies={matchingCompanies}
+        totalCompanies={companies.length}
+        open={directoryOpen}
+        onOpenChange={setDirectoryOpen}
+        onSelect={(id) => {
+          handleCompanySelect(id);
+          setDirectoryOpen(false);
+        }}
+        onCompare={toggleCompare}
+        compareIds={compareIds}
+      />
+
       {isMobile ? (
         <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
           <SheetTrigger asChild>
@@ -331,7 +387,7 @@ function App() {
       >
         <Globe
           ref={globeRef}
-          companies={companies}
+          companies={matchingCompanies}
           activeId={selectedId}
           filters={filters}
           onMarkerClick={handleCompanySelect}
